@@ -376,10 +376,21 @@ class Page(Document):
             "page_title": sanitize_filename(self.title),
         }
 
+    # @property
+    # def export_path(self) -> Path:
+    #     filepath_template = Template(settings.export.page_path.replace("{", "${"))
+    #     return Path(filepath_template.safe_substitute(self._template_vars))
+
+    # fix relative path
     @property
     def export_path(self) -> Path:
         filepath_template = Template(settings.export.page_path.replace("{", "${"))
-        return Path(filepath_template.safe_substitute(self._template_vars))
+        
+        raw_path = Path(filepath_template.safe_substitute(self._template_vars))
+      
+        if raw_path.is_absolute():
+            return Path(*raw_path.parts[1:])
+        return raw_path
 
     @property
     def html(self) -> str:
