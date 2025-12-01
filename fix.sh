@@ -54,6 +54,9 @@ process_md_file() {
     local line_num=0
     local in_tags_block=0
 
+    # Buffer for table headers to conditionally delete them
+    local table_buffer=""
+
     # Define regex pattern in variable to avoid syntax errors with < >
     local regex_details="</?(details|summary)>"
 
@@ -68,8 +71,6 @@ process_md_file() {
         if [ "$line_num" -le 20 ]; then
 
             # --- 1) Handle Frontmatter & Tags Removal ---
-            
-            # Detect Start/End of Frontmatter (---)
             if [[ "$line" =~ ^---$ ]]; then
                 if [ "$in_tags_block" -eq 1 ]; then
                     in_tags_block=0
@@ -77,13 +78,11 @@ process_md_file() {
                 write_line=0
             fi
 
-            # Detect "tags:" keyword
             if [[ "$line" =~ ^tags: ]]; then
                 in_tags_block=1
                 write_line=0
             fi
 
-            # Handle logic INSIDE tags block
             if [ "$in_tags_block" -eq 1 ]; then
                 if [[ "$line" =~ ^[[:space:]]*-[[:space:]]* ]]; then
                     write_line=0
@@ -92,9 +91,7 @@ process_md_file() {
                 fi
             fi
 
-
             # --- 2) Handle Breadcrumb / Navigation Links ---
-            
             if [ "$write_line" -eq 1 ] && [[ "$line" =~ \[.*\]\(.*\.md\) ]]; then
                 if [[ "$line" == *">"* ]]; then
                     write_line=0
@@ -115,26 +112,30 @@ process_md_file() {
 
         # ================================================
         # 3) Clean Inline Task Lists (Specific Class)
-        # Pattern: <ul class="inline-task-list"...><li...><span...>CONTENT</span></li></ul>
-        # -> - [ ] CONTENT
         # ================================================
         if [[ "$line" == *"inline-task-list"* ]]; then
-             # Use perl to extract content inside span and replace the whole ul structure with "- [ ]"
              line="$(echo "$line" | perl -pe 's{<ul class="inline-task-list"[^>]*><li[^>]*><span[^>]*>(.*?)</span></li></ul>}{- [ ] $1}g')"
-             
-             # Remove <code> and </code> tags that might be attached inside the content
              line="$(echo "$line" | sed -E 's/<\/?code>//g')"
-
              count_inline_task=$((count_inline_task+1))
         fi
 
         # ================================================
         # 3.5) General Text Cleanup
         # ================================================
-        # Unescape underscores: \_ -> _
         line="${line//\\_/_}"
-        # Normalize breaks: <br/> -> <br>
         line="${line//<br\/>/<br>}"
+
+        # ================================================
+        # 3.6) Clean Unicode Escaped Headers (UPDATED)
+        # Pattern: ## \uD83D\uDDD3 Date -> ## Date
+        # ================================================
+        if [[ "$line" == *"\\u"* ]]; then
+            # Capture Group 1: Start with # (any amount) or spaces
+            # Capture Group 2: The unicode sequence \uXXXX (one or more)
+            # Match optional spaces after unicode
+            # Replace with: Just Group 1 (the # part)
+            line="$(echo "$line" | sed -E 's/^([#[:space:]]*)(\\u[0-9a-fA-F]{4})+[[:space:]]*/\1/g')"
+        fi
 
         # ================================================
         # 4) Remove <details> and <summary> tags (GLOBAL)
@@ -145,14 +146,62 @@ process_md_file() {
         fi
 
         # ================================================
-        # 5) Clean HTML Lists in Tables (GLOBAL)
-        # Target: <ul><li><p>Text</p></li></ul> -> <br>* Text
+        # [NEW LOGIC] Table Header Buffering
+        # ================================================
+        if [[ "$line" =~ ^[[:space:]]*\|([[:space:]]*\|)+[[:space:]]*$ ]] || \
+           [[ "$line" =~ ^[[:space:]]*\|([[:space:]]*:?-+:?[[:space:]]*\|)+[[:space:]]*$ ]]; then
+            if [ -z "$table_buffer" ]; then
+                table_buffer="$line"
+            else
+                table_buffer="$table_buffer"$'\n'"$line"
+            fi
+            continue
+        fi
+
+        local is_trigger=0
+        if [[ "$line" == *"|"* ]]; then
+            if [[ "$line" == *"<ol"* ]] || [[ "$line" == *"> [!"* ]]; then
+                is_trigger=1
+            fi
+        fi
+
+        if [ "$is_trigger" -eq 1 ]; then
+            table_buffer=""
+        else
+            if [ -n "$table_buffer" ]; then
+                echo "$table_buffer" >> "$output_file"
+                table_buffer=""
+            fi
+        fi
+
+        # ================================================
+        # 5) Clean HTML Lists in Tables (Unordered <ul>)
         # ================================================
         if [[ "$line" == *"<ul>"* ]]; then
             line="$(echo "$line" | sed -E 's/<\/?ul>//g')"
-            line="$(echo "$line" | sed -E 's/<li><p>/<br>* /g')"
+            # เปลี่ยน <li> เป็น " * " โดยไม่ใส่ <br>
+            line="$(echo "$line" | sed -E 's/<li><p>/ * /g')"
             line="$(echo "$line" | sed -E 's/<\/p><\/li>//g')"
+            
+            # ลบ <br> ทั้งหมดในบรรทัดนี้ทิ้ง
+            line="$(echo "$line" | sed -E 's/<br>//g')"
+            
             count_html_list=$((count_html_list+1))
+        fi
+
+        # ================================================
+        # 5.5) Clean HTML Ordered Lists in Tables (Ordered <ol>)
+        # ================================================
+        if [[ "$line" == *"|"* ]] && [[ "$line" == *"<ol"* ]]; then
+            line="$(echo "$line" | perl -pe '
+                if (m/\|.*<ol/) {
+                    s/^\|.*<ol[^>]*>(.*?)<\/ol>.*$/$1/;
+                    $i = 1;
+                    s{<li><p>(.*?)</p></li>}{"\n" . $i++ . ". $1"}ge;
+                    s{<strong>}{**}g; 
+                    s{</strong>}{**}g;
+                }
+            ')"
         fi
 
         # ================================================
@@ -163,6 +212,16 @@ process_md_file() {
             count_image=$((count_image+1))
             line="$(echo "$line" | perl -pe 's{(?:\.\./)*attachments/(?:.+?/)*([^/\)]+\.(?:png|jpg|jpeg|gif))}{uploads/$1}gi')"
             count_path=$((count_path+1))
+        fi
+
+        # ================================================
+        # 6.5) Handle Admonitions inside Tables
+        # ================================================
+        if [[ "$line" == *"|"* ]] && [[ "$line" == *"> [!"* ]]; then
+            line="$(echo "$line" | perl -pe '
+                BEGIN { %m=("IMPORTANT"=>"info","WARNING"=>"warning","CAUTION"=>"warning","TIP"=>"success","NOTE"=>"tip"); }
+                s/>\s*\[\!(IMPORTANT|WARNING|CAUTION|TIP|NOTE)\](.*?)(?=\|)/\n:::$m{$1}\n$2\n:::/g
+            ')"
         fi
 
         # ================================================
@@ -202,6 +261,11 @@ process_md_file() {
         echo "$line" >> "$output_file"
     done < "$input_file"
 
+    # Flush remaining buffer at EOF
+    if [ -n "$table_buffer" ]; then
+        echo "$table_buffer" >> "$output_file"
+    fi
+
     # Close open admonition at EOF
     if [ "$in_admonition" -eq 1 ]; then
         echo ":::" >> "$output_file"
@@ -227,7 +291,7 @@ for part in "${PARTS[@]}"; do
     mkdir -p "$DST"
     mkdir -p "$DST/uploads"
 
-    # 1) copy images (flatten) from part/attachments -> dst/uploads
+    # 1) copy images (flatten)
     ATT_ROOT="$SRC/attachments"
     if [ -d "$ATT_ROOT" ]; then
         echo "Copying images from $ATT_ROOT -> $DST/uploads (flatten)"
@@ -239,7 +303,7 @@ for part in "${PARTS[@]}"; do
         echo "  No attachments in $SRC (skipping image copy)"
     fi
 
-    # 2) process md files under part (preserve tree)
+    # 2) process md files
     echo "Processing .md files under $SRC"
     while IFS= read -r -d '' mdfile; do
         rel="${mdfile#$SRC/}"
