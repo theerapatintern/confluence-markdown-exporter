@@ -11,9 +11,11 @@ if [ -d "$DES" ]; then
     rm -rf "$DES"
 fi
 
-mkdir -p "$DES/p1" "$DES/p2" "$DES/p3"
+# สร้าง folder p1, p2, p3, p4
+mkdir -p "$DES/p1" "$DES/p2" "$DES/p3" "$DES/p4"
 
 # --- DEFINE GROUPS ---
+
 GROUP1=(
 "Browser Problem (Bug)"
 "Data Engineer"
@@ -29,6 +31,7 @@ GROUP1=(
 "MOD Release"
 )
 
+# DevOps ที่จะไป p2
 GROUP2_DEVOPS=(
 "5090"
 "Ai-agentic"
@@ -41,6 +44,7 @@ GROUP2_DEVOPS=(
 "firebase"
 )
 
+# กลุ่มหลัก p2
 GROUP2=(
 "Mongo"
 "My Express"
@@ -55,6 +59,19 @@ GROUP2=(
 "Tester"
 "Training"
 "Work Around"
+)
+
+# DevOps ที่จะไป p3
+GROUP3_DEVOPS=(
+"GCloud"
+"Grafana"
+"Helm-chart"
+"Incident report"
+"k8s"
+"Kong"
+"library"
+
+# ใส่ชื่อ Folder ใน DevOps ที่ต้องการให้ไป p3 ที่นี่
 )
 
 # helper: membership check
@@ -93,13 +110,18 @@ while IFS= read -r -d '' md; do
     elif in_group "$top" "${GROUP2[@]}"; then
         dest="p2"
     elif [[ "$top" == "DevOps" ]]; then
+        # Logic สำหรับ DevOps แยก 3 ทาง (p2, p3, p4)
         sub="$(echo "$rel" | cut -d/ -f2)"
+        
         if in_group "$sub" "${GROUP2_DEVOPS[@]}"; then
             dest="p2"
-        else
+        elif in_group "$sub" "${GROUP3_DEVOPS[@]}"; then
             dest="p3"
+        else
+            dest="p4" # ที่เหลือของ DevOps ไป p4
         fi
     else
+        # ที่เหลือที่ไม่ใช่ DevOps และไม่อยู่ใน Group 1 หรือ 2 ให้ลง p2 (ตาม Logic เดิม)
         dest="p2"
     fi
 
@@ -126,11 +148,15 @@ if [ -d "$attachments_root" ]; then
         elif in_group "$top" "${GROUP2[@]}"; then
             dest="p2"
         elif [[ "$top" == "DevOps" ]]; then
+            # Logic DevOps สำหรับรูปภาพ (ต้องเหมือน MD)
             sub="$(echo "$rel" | cut -d/ -f2)"
+            
             if in_group "$sub" "${GROUP2_DEVOPS[@]}"; then
                 dest="p2"
-            else
+            elif in_group "$sub" "${GROUP3_DEVOPS[@]}"; then
                 dest="p3"
+            else
+                dest="p4"
             fi
         else
             dest="p2"

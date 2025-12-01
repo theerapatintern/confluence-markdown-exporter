@@ -5,7 +5,8 @@ set -euo pipefail
 SRC_ROOT="src"
 DES_ROOT="des"
 
-PARTS=( "p1" "p2" "p3" )
+# เพิ่ม "p4" เข้าไปในรายการ
+PARTS=( "p1" "p2" "p3" "p4" )
 
 # safety: don't accidentally rm /
 if [ -z "$DES_ROOT" ] || [ "$DES_ROOT" = "/" ]; then
@@ -47,6 +48,7 @@ process_md_file() {
     local count_path=0
     local count_details=0
     local count_html_list=0
+    local count_inline_task=0
     
     # State flags for Header cleaning
     local line_num=0
@@ -69,11 +71,9 @@ process_md_file() {
             
             # Detect Start/End of Frontmatter (---)
             if [[ "$line" =~ ^---$ ]]; then
-                # If we are strictly inside a tags block, this ends it
                 if [ "$in_tags_block" -eq 1 ]; then
                     in_tags_block=0
                 fi
-                # User wants to remove the --- wrapper as well
                 write_line=0
             fi
 
@@ -85,11 +85,9 @@ process_md_file() {
 
             # Handle logic INSIDE tags block
             if [ "$in_tags_block" -eq 1 ]; then
-                # If line starts with "-" (list item), skip it
                 if [[ "$line" =~ ^[[:space:]]*-[[:space:]]* ]]; then
                     write_line=0
                 elif [[ -z "${line// }" ]]; then
-                    # Skip empty lines inside tags block
                     write_line=0
                 fi
             fi
@@ -98,18 +96,12 @@ process_md_file() {
             # --- 2) Handle Breadcrumb / Navigation Links ---
             
             if [ "$write_line" -eq 1 ] && [[ "$line" =~ \[.*\]\(.*\.md\) ]]; then
-                
-                # Case A: Contains ">" (Breadcrumb chain)
                 if [[ "$line" == *">"* ]]; then
                     write_line=0
                 fi
-
-                # Case B: Empty text link
                 if [[ "$line" =~ ^\[\]\(.*\.md\) ]]; then
                      write_line=0
                 fi
-
-                # Case C: Standalone Link (Navigation Header)
                 trimmed_line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
                 if [[ "$trimmed_line" =~ ^\[.*\]\(.*\.md\)$ ]]; then
                     write_line=0
@@ -117,52 +109,64 @@ process_md_file() {
             fi
         fi
 
-        # If flagged to skip, continue to next line
         if [ "$write_line" -eq 0 ]; then
             continue
         fi
 
         # ================================================
-        # 3) Remove <details> and <summary> tags (GLOBAL)
+        # 3) Clean Inline Task Lists (Specific Class)
+        # Pattern: <ul class="inline-task-list"...><li...><span...>CONTENT</span></li></ul>
+        # -> - [ ] CONTENT
         # ================================================
-        # Use the variable $regex_details here
+        if [[ "$line" == *"inline-task-list"* ]]; then
+             # Use perl to extract content inside span and replace the whole ul structure with "- [ ]"
+             line="$(echo "$line" | perl -pe 's{<ul class="inline-task-list"[^>]*><li[^>]*><span[^>]*>(.*?)</span></li></ul>}{- [ ] $1}g')"
+             
+             # Remove <code> and </code> tags that might be attached inside the content
+             line="$(echo "$line" | sed -E 's/<\/?code>//g')"
+
+             count_inline_task=$((count_inline_task+1))
+        fi
+
+        # ================================================
+        # 3.5) General Text Cleanup
+        # ================================================
+        # Unescape underscores: \_ -> _
+        line="${line//\\_/_}"
+        # Normalize breaks: <br/> -> <br>
+        line="${line//<br\/>/<br>}"
+
+        # ================================================
+        # 4) Remove <details> and <summary> tags (GLOBAL)
+        # ================================================
         if [[ "$line" =~ $regex_details ]]; then
             line="$(echo "$line" | sed -E 's/<\/?(details|summary)>//g')"
             count_details=$((count_details+1))
         fi
 
         # ================================================
-        # 4) Clean HTML Lists in Tables (GLOBAL)
+        # 5) Clean HTML Lists in Tables (GLOBAL)
         # Target: <ul><li><p>Text</p></li></ul> -> <br>* Text
         # ================================================
         if [[ "$line" == *"<ul>"* ]]; then
-            # Remove <ul> and </ul>
             line="$(echo "$line" | sed -E 's/<\/?ul>//g')"
-            
-            # Replace <li><p> with <br>* (Using <br> forces line break in rendered MD tables)
             line="$(echo "$line" | sed -E 's/<li><p>/<br>* /g')"
-            
-            # Remove closing </p></li>
             line="$(echo "$line" | sed -E 's/<\/p><\/li>//g')"
-            
             count_html_list=$((count_html_list+1))
         fi
 
         # ================================================
-        # 5) Remove alt text in images & Fix Paths
+        # 6) Remove alt text in images & Fix Paths
         # ================================================
         if [[ "$line" == *"!"* ]]; then
-            # Convert ![alt](path) -> ![](path)
             line="$(echo "$line" | sed -E 's/!\[[^]]*\]\(([^)]+)\)/![](\1)/g')"
             count_image=$((count_image+1))
-
-            # Update path to uploads/<image.png>
             line="$(echo "$line" | perl -pe 's{(?:\.\./)*attachments/(?:.+?/)*([^/\)]+\.(?:png|jpg|jpeg|gif))}{uploads/$1}gi')"
             count_path=$((count_path+1))
         fi
 
         # ================================================
-        # 6) Start Admonition
+        # 7) Start Admonition
         # ================================================
         TYPE_GFM="$(echo "$line" | sed -nE 's/^>[[:space:]]*\[!(IMPORTANT|WARNING|CAUTION|TIP|NOTE)\][[:space:]]*$/\1/p')"
         if [ -n "$TYPE_GFM" ]; then
@@ -178,7 +182,7 @@ process_md_file() {
         fi
 
         # ================================================
-        # 7) Inside Admonition
+        # 8) Inside Admonition
         # ================================================
         if [ "$in_admonition" -eq 1 ] && [[ "$line" == ">"* ]]; then
             content="$(echo "$line" | sed -E 's/^>[[:space:]]*//')"
@@ -187,7 +191,7 @@ process_md_file() {
         fi
 
         # ================================================
-        # 8) End Admonition
+        # 9) End Admonition
         # ================================================
         if [ "$in_admonition" -eq 1 ]; then
             echo ":::" >> "$output_file"
@@ -203,7 +207,7 @@ process_md_file() {
         echo ":::" >> "$output_file"
     fi
 
-    echo "Processing: $rel -> [Admonitions:$count_admonition Img:$count_image CleanHTML:$count_html_list]"
+    echo "Processing: $rel -> [Tasks:$count_inline_task Img:$count_image Lists:$count_html_list]"
 }
 
 
