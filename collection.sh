@@ -2,7 +2,7 @@
 
 # ================= CONFIGURATION =================
 DOMAIN="https://outline-dev.myorder.dev"
-TOKEN="ol_api_kY6SKBI7Fv2NfphUTMIteXce758QOTdWe57ERi"
+TOKEN="ol_api_0AShz5CHD6QWyZrujk689rFr1TGIfbrIqJwUYI"
 TARGET_COLLECTIONS=("p1" "p2" "p3" "p4")
 # =================================================
 

@@ -2,7 +2,8 @@
 
 # ================= CONFIGURATION =================
 DOMAIN="https://outline-dev.myorder.dev"
-TOKEN="ol_api_kY6SKBI7Fv2NfphUTMIteXce758QOTdWe57ERi"
+TOKEN="ol_api_bJF3MBaNFmK5VGNo3eA5SdNMJIqemoCGpz6hlW"
+SKIP_NAME="Welcome"  # 👈 ชื่อ Collection ที่ต้องการยกเว้นการลบ
 # =================================================
 
 API_URL="${DOMAIN}/api"
@@ -47,7 +48,7 @@ if [ "$DELETE_ACTIVE" = false ] && [ "$DELETE_ARCHIVED" = false ]; then
     DELETE_ARCHIVED=true
 fi
 
-echo "⚠️  WARNING: This script will PERMANENTLY DELETE Outline Collections!"
+echo "⚠️  WARNING: This script will PERMANENTLY DELETE Outline Collections (Except '$SKIP_NAME')!"
 echo "   Targets:"
 [ "$DELETE_ACTIVE" = true ] && echo "     - Active collections"
 [ "$DELETE_ARCHIVED" = true ] && echo "     - Archived collections"
@@ -74,6 +75,15 @@ delete_collections() {
         
         COLL_ID=$(_jq '.id')
         COLL_NAME=$(_jq '.name')
+
+        # ---------------------------------------------------------
+        # 👇 NEW: Check specific collection name to skip
+        # ---------------------------------------------------------
+        if [[ "$COLL_NAME" == "$SKIP_NAME" ]]; then
+            echo "   🛡️  Skipping protected collection: $COLL_NAME ($COLL_ID)"
+            continue
+        fi
+        # ---------------------------------------------------------
         
         echo "   🗑️  Deleting ($type_label): $COLL_NAME ($COLL_ID)..."
         

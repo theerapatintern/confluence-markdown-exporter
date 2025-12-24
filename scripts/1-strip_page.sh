@@ -15,7 +15,7 @@ TMP_FILE=$(mktemp)
 
 while IFS= read -r line || [ -n "$line" ]; do
     
-    # ดึงทุก /pages/<digits> (จะ match ได้แน่นอน)
+    # ดึงทุก /pages/<digits> 
     ids=$(echo "$line" | grep -oE '/pages/[0-9]+' | sed 's#/pages/##')
 
     if [ -n "$ids" ]; then
