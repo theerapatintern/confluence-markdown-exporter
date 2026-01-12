@@ -1,27 +1,57 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ---------- CONFIG (locked) ----------
-SRC_ROOT="src"
-DES_ROOT="des"
+# ==========================================
+# CONFIGURATION
+# ==========================================
+# INPUT_DIR: โฟลเดอร์ต้นทางที่เก็บไฟล์ดิบ (เช่น p1, p2 ที่ export มา)
+INPUT_DIR="migrate/parts" 
 
-# เพิ่ม "p4" เข้าไปในรายการ
-PARTS=( "p1" "p2" "p3" "p4" )
+# OUTPUT_DIR: โฟลเดอร์ปลายทางสำหรับไฟล์ที่แก้ไขเสร็จแล้ว (พร้อม migrate)
+OUTPUT_DIR="migrate/ready_to_import"
 
-# safety: don't accidentally rm /
-if [ -z "$DES_ROOT" ] || [ "$DES_ROOT" = "/" ]; then
-    echo "Bad DES_ROOT ($DES_ROOT). Aborting."
+# ==========================================
+# AUTO-DETECT PARTS
+# ==========================================
+# ตรวจสอบว่ามี Input Dir จริงไหม
+if [ ! -d "$INPUT_DIR" ]; then
+    echo "❌ Error: Input directory '$INPUT_DIR' not found."
     exit 1
 fi
 
-# ---------- reset destination ----------
-if [ -d "$DES_ROOT" ]; then
-    echo "Cleaning old destination: $DES_ROOT"
-    rm -rf "$DES_ROOT"
-fi
-mkdir -p "$DES_ROOT"
+echo "🔍 Detecting parts in '$INPUT_DIR'..."
+PARTS=()
+# ใช้ find หาเฉพาะ Directory ชั้นแรก (maxdepth 1)
+while IFS= read -r -d '' dir; do
+    # ตัด path ออกเอาแค่ชื่อ folder (เช่น p1, p2)
+    part_name="$(basename "$dir")"
+    PARTS+=("$part_name")
+done < <(find "$INPUT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
-# ---------- helper functions ----------
+if [ ${#PARTS[@]} -eq 0 ]; then
+    echo "⚠️  Warning: No parts (subdirectories) found in '$INPUT_DIR'."
+    exit 0
+fi
+
+echo "✅ Found ${#PARTS[@]} parts: ${PARTS[*]}"
+
+# ==========================================
+# SAFETY & CLEANUP
+# ==========================================
+if [ -z "$OUTPUT_DIR" ] || [ "$OUTPUT_DIR" = "/" ]; then
+    echo "❌ Error: Bad OUTPUT_DIR ($OUTPUT_DIR). Aborting."
+    exit 1
+fi
+
+if [ -d "$OUTPUT_DIR" ]; then
+    echo "🧹 Cleaning old destination: $OUTPUT_DIR"
+    rm -rf "$OUTPUT_DIR"
+fi
+mkdir -p "$OUTPUT_DIR"
+
+# ==========================================
+# HELPER FUNCTIONS
+# ==========================================
 map_type() {
     local type_gfm="$1"
     case "$type_gfm" in
@@ -50,53 +80,34 @@ process_md_file() {
     local count_html_list=0
     local count_inline_task=0
     
-    # State flags for Header cleaning
     local line_num=0
     local in_tags_block=0
-
-    # Buffer for table headers to conditionally delete them
     local table_buffer=""
-
-    # Define regex pattern in variable to avoid syntax errors with < >
     local regex_details="</?(details|summary)>"
 
     while IFS= read -r line || [ -n "$line" ]; do
-        line="${line//$'\r'/}"  # strip CR for Windows files
+        line="${line//$'\r'/}"
         line_num=$((line_num+1))
-        local write_line=1  # Default: write this line unless logic says otherwise
+        local write_line=1
 
-        # ================================================
-        # PREPROCESSING: Header Cleanup (First 20 lines)
-        # ================================================
+        # --- PREPROCESSING (Header/Frontmatter) ---
         if [ "$line_num" -le 20 ]; then
-
-            # --- 1) Handle Frontmatter & Tags Removal ---
             if [[ "$line" =~ ^---$ ]]; then
-                if [ "$in_tags_block" -eq 1 ]; then
-                    in_tags_block=0
-                fi
+                if [ "$in_tags_block" -eq 1 ]; then in_tags_block=0; fi
                 write_line=0
             fi
-
             if [[ "$line" =~ ^tags: ]]; then
                 in_tags_block=1
                 write_line=0
             fi
-
             if [ "$in_tags_block" -eq 1 ]; then
-                if [[ "$line" =~ ^[[:space:]]*-[[:space:]]* ]]; then
-                    write_line=0
-                elif [[ -z "${line// }" ]]; then
+                if [[ "$line" =~ ^[[:space:]]*-[[:space:]]* ]] || [[ -z "${line// }" ]]; then
                     write_line=0
                 fi
             fi
-
-            # --- 2) Handle Breadcrumb / Navigation Links ---
+            # Handle Breadcrumb / Navigation Links
             if [ "$write_line" -eq 1 ] && [[ "$line" =~ \[.*\]\(.*\.md\) ]]; then
-                if [[ "$line" == *">"* ]]; then
-                    write_line=0
-                fi
-                if [[ "$line" =~ ^\[\]\(.*\.md\) ]]; then
+                if [[ "$line" == *">"* ]] || [[ "$line" =~ ^\[\]\(.*\.md\) ]]; then
                      write_line=0
                 fi
                 trimmed_line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
@@ -106,107 +117,72 @@ process_md_file() {
             fi
         fi
 
-        if [ "$write_line" -eq 0 ]; then
-            continue
-        fi
+        if [ "$write_line" -eq 0 ]; then continue; fi
 
-        # ================================================
-        # 3) Clean Inline Task Lists (Specific Class)
-        # ================================================
+        # --- CLEANUP LOGIC ---
+        
+        # Inline Task Lists
         if [[ "$line" == *"inline-task-list"* ]]; then
              line="$(echo "$line" | perl -pe 's{<ul class="inline-task-list"[^>]*><li[^>]*><span[^>]*>(.*?)</span></li></ul>}{- [ ] $1}g')"
              line="$(echo "$line" | sed -E 's/<\/?code>//g')"
              count_inline_task=$((count_inline_task+1))
         fi
 
-        # ================================================
-        # 3.5) General Text Cleanup
-        # ================================================
+        # General Text
         line="${line//\\_/_}"
         line="${line//<br\/>/<br>}"
 
-        # ================================================
-        # 3.6) Clean Unicode Escaped Headers (UPDATED)
-        # Pattern: ## \uD83D\uDDD3 Date -> ## Date
-        # ================================================
+        # Clean Unicode Headers
         if [[ "$line" == *"\\u"* ]]; then
-            # Capture Group 1: Start with # (any amount) or spaces
-            # Capture Group 2: The unicode sequence \uXXXX (one or more)
-            # Match optional spaces after unicode
-            # Replace with: Just Group 1 (the # part)
             line="$(echo "$line" | sed -E 's/^([#[:space:]]*)(\\u[0-9a-fA-F]{4})+[[:space:]]*/\1/g')"
         fi
 
-        # ================================================
-        # 4) Remove <details> and <summary> tags (GLOBAL)
-        # ================================================
+        # Remove details/summary
         if [[ "$line" =~ $regex_details ]]; then
             line="$(echo "$line" | sed -E 's/<\/?(details|summary)>//g')"
             count_details=$((count_details+1))
         fi
 
-        # ================================================
-        # [NEW LOGIC] Table Header Buffering
-        # ================================================
+        # --- TABLE BUFFERING ---
         if [[ "$line" =~ ^[[:space:]]*\|([[:space:]]*\|)+[[:space:]]*$ ]] || \
            [[ "$line" =~ ^[[:space:]]*\|([[:space:]]*:?-+:?[[:space:]]*\|)+[[:space:]]*$ ]]; then
-            if [ -z "$table_buffer" ]; then
-                table_buffer="$line"
-            else
-                table_buffer="$table_buffer"$'\n'"$line"
-            fi
+            if [ -z "$table_buffer" ]; then table_buffer="$line"; else table_buffer="$table_buffer"$'\n'"$line"; fi
             continue
         fi
 
         local is_trigger=0
         if [[ "$line" == *"|"* ]]; then
-            if [[ "$line" == *"<ol"* ]] || [[ "$line" == *"> [!"* ]]; then
-                is_trigger=1
-            fi
+            if [[ "$line" == *"<ol"* ]] || [[ "$line" == *"> [!"* ]]; then is_trigger=1; fi
         fi
 
         if [ "$is_trigger" -eq 1 ]; then
             table_buffer=""
         else
-            if [ -n "$table_buffer" ]; then
-                echo "$table_buffer" >> "$output_file"
-                table_buffer=""
-            fi
+            if [ -n "$table_buffer" ]; then echo "$table_buffer" >> "$output_file"; table_buffer=""; fi
         fi
 
-        # ================================================
-        # 5) Clean HTML Lists in Tables (Unordered <ul>)
-        # ================================================
+        # Clean HTML Lists (<ul>)
         if [[ "$line" == *"<ul>"* ]]; then
             line="$(echo "$line" | sed -E 's/<\/?ul>//g')"
-            # เปลี่ยน <li> เป็น " * " โดยไม่ใส่ <br>
             line="$(echo "$line" | sed -E 's/<li><p>/ * /g')"
             line="$(echo "$line" | sed -E 's/<\/p><\/li>//g')"
-            
-            # ลบ <br> ทั้งหมดในบรรทัดนี้ทิ้ง
             line="$(echo "$line" | sed -E 's/<br>//g')"
-            
             count_html_list=$((count_html_list+1))
         fi
 
-        # ================================================
-        # 5.5) Clean HTML Ordered Lists in Tables (Ordered <ol>)
-        # ================================================
+        # Clean HTML Lists (<ol>) inside tables
         if [[ "$line" == *"|"* ]] && [[ "$line" == *"<ol"* ]]; then
             line="$(echo "$line" | perl -pe '
                 if (m/\|.*<ol/) {
                     s/^\|.*<ol[^>]*>(.*?)<\/ol>.*$/$1/;
                     $i = 1;
                     s{<li><p>(.*?)</p></li>}{"\n" . $i++ . ". $1"}ge;
-                    s{<strong>}{**}g; 
-                    s{</strong>}{**}g;
+                    s{<strong>}{**}g; s{</strong>}{**}g;
                 }
             ')"
         fi
 
-        # ================================================
-        # 6) Remove alt text in images & Fix Paths
-        # ================================================
+        # Images & Paths
         if [[ "$line" == *"!"* ]]; then
             line="$(echo "$line" | sed -E 's/!\[[^]]*\]\(([^)]+)\)/![](\1)/g')"
             count_image=$((count_image+1))
@@ -214,9 +190,7 @@ process_md_file() {
             count_path=$((count_path+1))
         fi
 
-        # ================================================
-        # 6.5) Handle Admonitions inside Tables
-        # ================================================
+        # Admonitions in Tables
         if [[ "$line" == *"|"* ]] && [[ "$line" == *"> [!"* ]]; then
             line="$(echo "$line" | perl -pe '
                 BEGIN { %m=("IMPORTANT"=>"info","WARNING"=>"warning","CAUTION"=>"warning","TIP"=>"success","NOTE"=>"tip"); }
@@ -224,15 +198,10 @@ process_md_file() {
             ')"
         fi
 
-        # ================================================
-        # 7) Start Admonition
-        # ================================================
+        # Admonitions Block
         TYPE_GFM="$(echo "$line" | sed -nE 's/^>[[:space:]]*\[!(IMPORTANT|WARNING|CAUTION|TIP|NOTE)\][[:space:]]*$/\1/p')"
         if [ -n "$TYPE_GFM" ]; then
-            if [ "$in_admonition" -eq 1 ]; then
-                echo ":::" >> "$output_file"
-                echo "" >> "$output_file"
-            fi
+            if [ "$in_admonition" -eq 1 ]; then echo ":::" >> "$output_file"; echo "" >> "$output_file"; fi
             TYPE_NEW="$(map_type "$TYPE_GFM")"
             echo ":::${TYPE_NEW}" >> "$output_file"
             in_admonition=1
@@ -240,79 +209,72 @@ process_md_file() {
             continue
         fi
 
-        # ================================================
-        # 8) Inside Admonition
-        # ================================================
         if [ "$in_admonition" -eq 1 ] && [[ "$line" == ">"* ]]; then
             content="$(echo "$line" | sed -E 's/^>[[:space:]]*//')"
             echo "$content" >> "$output_file"
             continue
         fi
 
-        # ================================================
-        # 9) End Admonition
-        # ================================================
         if [ "$in_admonition" -eq 1 ]; then
             echo ":::" >> "$output_file"
             in_admonition=0
         fi
 
-        # Write normal line
         echo "$line" >> "$output_file"
     done < "$input_file"
 
-    # Flush remaining buffer at EOF
-    if [ -n "$table_buffer" ]; then
-        echo "$table_buffer" >> "$output_file"
-    fi
-
-    # Close open admonition at EOF
-    if [ "$in_admonition" -eq 1 ]; then
-        echo ":::" >> "$output_file"
-    fi
-
-    echo "Processing: $rel -> [Tasks:$count_inline_task Img:$count_image Lists:$count_html_list]"
+    if [ -n "$table_buffer" ]; then echo "$table_buffer" >> "$output_file"; fi
+    if [ "$in_admonition" -eq 1 ]; then echo ":::" >> "$output_file"; fi
+    
+    # Optional: Log per file details
+    # echo "Processing: $rel -> [Tasks:$count_inline_task Img:$count_image Lists:$count_html_list]"
 }
 
-
-# ---------- core loop for each part ----------
+# ==========================================
+# MAIN LOOP
+# ==========================================
 for part in "${PARTS[@]}"; do
-    SRC="$SRC_ROOT/$part"
-    DST="$DES_ROOT/$part"
+    SRC="$INPUT_DIR/$part"
+    DST="$OUTPUT_DIR/$part"
 
     echo
     echo "===== Processing part: $part ====="
 
     if [ ! -d "$SRC" ]; then
-        echo "Source part folder not found: $SRC  (skipping)"
+        echo "⚠️  Source part folder not found: $SRC (skipping)"
         continue
     fi
 
     mkdir -p "$DST"
     mkdir -p "$DST/uploads"
 
-    # 1) copy images (flatten)
+    # 1) Copy images (flatten structure)
     ATT_ROOT="$SRC/attachments"
     if [ -d "$ATT_ROOT" ]; then
-        echo "Copying images from $ATT_ROOT -> $DST/uploads (flatten)"
+        echo "📸 Copying images from $ATT_ROOT -> $DST/uploads"
+        # ใช้ find + cp เพื่อความชัวร์เรื่อง subdirectories ใน attachments
         while IFS= read -r -d '' img; do
             base="$(basename "$img")"
-            cp "$img" "$DST/uploads/$base"
+            # ใช้ -n เพื่อไม่ให้ overwrite ถ้าชื่อซ้ำ (หรือลบ -n ออกถ้าอยากให้ทับ)
+            cp -n "$img" "$DST/uploads/$base"
         done < <(find "$ATT_ROOT" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.gif' \) -print0)
     else
-        echo "  No attachments in $SRC (skipping image copy)"
+        echo "   No attachments folder found in $SRC"
     fi
 
-    # 2) process md files
-    echo "Processing .md files under $SRC"
+    # 2) Process .md files
+    echo "📝 Processing .md files..."
+    count_files=0
     while IFS= read -r -d '' mdfile; do
         rel="${mdfile#$SRC/}"
         out="$DST/$rel"
         process_md_file "$mdfile" "$rel" "$out"
+        count_files=$((count_files+1))
     done < <(find "$SRC" -type f -name "*.md" -print0)
-
-    echo "===== Done part: $part ====="
+    
+    echo "   Processed $count_files Markdown files."
 done
 
 echo
-echo "✅ All parts processed. Output base: $DES_ROOT"
+echo "🎉 All parts processed successfully."
+echo "📂 Output Location: $OUTPUT_DIR"

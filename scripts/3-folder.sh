@@ -1,174 +1,141 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- FIXED PATHS ---
+# --- CONFIGURATION ---
 SRC="output"
-DES="src"
+DES="migrate/parts"
+MAX_SIZE_MB=100
+# แปลง MB เป็น KB (1024 KB = 1 MB)
+MAX_SIZE_KB=$((MAX_SIZE_MB * 1024))
 
-# --- RESET DESTINATION ---
+# --- CLEANUP ---
 if [ -d "$DES" ]; then
     echo "Cleaning old destination: $DES"
     rm -rf "$DES"
 fi
 
-# สร้าง folder p1, p2, p3, p4
-mkdir -p "$DES/p1" "$DES/p2" "$DES/p3" "$DES/p4"
+# --- FUNCTION: Calculate Size ---
+# คำนวณขนาดของ Item (MD/Folder) + Attachments ที่เกี่ยวข้อง
+get_total_size_kb() {
+    local item_path="$1"       # path ของไฟล์หรือโฟลเดอร์ใน output/
+    local relative_path="${item_path#$SRC/}"
+    local size_kb=0
 
-# --- DEFINE GROUPS ---
+    # 1. ขนาดของตัวไฟล์/โฟลเดอร์เอง
+    if [ -e "$item_path" ]; then
+        local s
+        s=$(du -sk "$item_path" | cut -f1)
+        size_kb=$((size_kb + s))
+    fi
 
-GROUP1=(
-"Browser Problem (Bug)"
-"Data Engineer"
-"Deploy Process"
-"E-CRM ข้อมมูลลูกค้า"
-"Express Informations"
-"Investigate"
-"Issue"
-"Line Message APIs"
-"Members"
-"Meta"
-"Mobile MyOrder (MODM)"
-"MOD Release"
-)
+    # 2. ขนาดของ Attachments ที่เกี่ยวข้อง (ถ้ามี)
+    local attach_path=""
+    if [ -d "$item_path" ]; then
+        # กรณีเป็น Folder
+        attach_path="$SRC/attachments/$relative_path"
+    else
+        # กรณีเป็น File .md (ตัด .md ออกเพื่อหา folder ใน attachments)
+        local no_ext="${relative_path%.md}"
+        attach_path="$SRC/attachments/$no_ext"
+    fi
 
-# DevOps ที่จะไป p2
-GROUP2_DEVOPS=(
-"5090"
-"Ai-agentic"
-"ArgoCD"
-"Cloudflare"
-"CloudSQL"
-"Crossplane"
-"env with vault"
-"Envoy"
-"firebase"
-)
+    if [ -d "$attach_path" ]; then
+        local s
+        s=$(du -sk "$attach_path" | cut -f1)
+        size_kb=$((size_kb + s))
+    fi
 
-# กลุ่มหลัก p2
-GROUP2=(
-"Mongo"
-"My Express"
-"My Order Web"
-"MyAI"
-"Order Status Update"
-"Payment Gateway"
-"Product (คลังสินค้า)"
-"Red"
-"Release Note"
-"Shopee"
-"Tester"
-"Training"
-"Work Around"
-)
-
-# DevOps ที่จะไป p3
-GROUP3_DEVOPS=(
-"GCloud"
-"Grafana"
-"Helm-chart"
-"Incident report"
-"k8s"
-"Kong"
-"library"
-
-# ใส่ชื่อ Folder ใน DevOps ที่ต้องการให้ไป p3 ที่นี่
-)
-
-# helper: membership check
-in_group() {
-    local val="$1"
-    shift
-    for v in "$@"; do
-        if [ "$v" = "$val" ]; then
-            return 0
-        fi
-    done
-    return 1
+    echo "$size_kb"
 }
 
-# ---------------------------
-#  COPY Markdown files (.md)
-# ---------------------------
-declare -A MD_P1_TOPS  # สำหรับ md ไม่มี folder
+# --- FUNCTION: Copy Item ---
+copy_item() {
+    local item_path="$1"
+    local part_dir="$2"
+    local relative_path="${item_path#$SRC/}"
 
-while IFS= read -r -d '' md; do
-    rel="${md#$SRC/}"
-    if [[ "$rel" == */* ]]; then
-        top="${rel%%/*}"
+    # 1. Copy ตัว Content (File หรือ Folder)
+    local dest_target="$part_dir/$relative_path"
+    mkdir -p "$(dirname "$dest_target")"
+    cp -r "$item_path" "$dest_target"
+
+    # 2. Copy Attachments (ถ้ามี)
+    local attach_src=""
+    local attach_dest_rel=""
+    
+    if [ -d "$item_path" ]; then
+        attach_src="$SRC/attachments/$relative_path"
+        attach_dest_rel="attachments/$relative_path"
     else
-        top=""
+        local no_ext="${relative_path%.md}"
+        attach_src="$SRC/attachments/$no_ext"
+        attach_dest_rel="attachments/$no_ext"
     fi
 
-    # Determine destination
-    dest=""
-    if in_group "$top" "${GROUP1[@]}" || [[ "$rel" != */* ]]; then
-        dest="p1"
-        # ถ้าไฟล์ md ไม่มี folder ให้บันทึกชื่อ top สำหรับ attachments
-        if [[ "$rel" != */* ]]; then
-            MD_P1_TOPS["${rel%.md}"]=1
-        fi
-    elif in_group "$top" "${GROUP2[@]}"; then
-        dest="p2"
-    elif [[ "$top" == "DevOps" ]]; then
-        # Logic สำหรับ DevOps แยก 3 ทาง (p2, p3, p4)
-        sub="$(echo "$rel" | cut -d/ -f2)"
-        
-        if in_group "$sub" "${GROUP2_DEVOPS[@]}"; then
-            dest="p2"
-        elif in_group "$sub" "${GROUP3_DEVOPS[@]}"; then
-            dest="p3"
-        else
-            dest="p4" # ที่เหลือของ DevOps ไป p4
-        fi
-    else
-        # ที่เหลือที่ไม่ใช่ DevOps และไม่อยู่ใน Group 1 หรือ 2 ให้ลง p2 (ตาม Logic เดิม)
-        dest="p2"
+    if [ -d "$attach_src" ]; then
+        local dest_attach="$part_dir/$attach_dest_rel"
+        mkdir -p "$(dirname "$dest_attach")"
+        cp -r "$attach_src" "$dest_attach"
+    fi
+}
+
+# --- MAIN LOGIC ---
+
+CURRENT_PART=1
+CURRENT_SIZE_KB=0
+
+echo "🔍 Scanning and Grouping files (Max $MAX_SIZE_MB MB per part)..."
+
+# สร้าง Array เก็บรายการที่จะย้าย (Move List)
+declare -a MOVE_LIST
+
+# 1. วนลูปหาของใน output/
+while IFS= read -r -d '' item; do
+    rel="${item#$SRC/}"
+    
+    # ข้าม folder attachments หลัก
+    if [[ "$rel" == "attachments" ]]; then
+        continue
     fi
 
-    target_dir="$(dirname "$DES/$dest/$rel")"
-    mkdir -p "$target_dir"
-    cp "$md" "$DES/$dest/$rel"
-    printf "Copied MD: %s -> %s\n" "$md" "$DES/$dest/$rel"
-done < <(find "$SRC" -type f -name "*.md" -print0)
+    if [[ "$rel" == "DevOps" ]]; then
+        # --- SPECIAL CASE: DevOps ---
+        echo "   -> Found 'DevOps' collection, splitting its contents..."
+        while IFS= read -r -d '' subitem; do
+            MOVE_LIST+=("$subitem")
+        done < <(find "$item" -mindepth 1 -maxdepth 1 -print0)
+    else
+        # --- NORMAL CASE ---
+        MOVE_LIST+=("$item")
+    fi
 
-# ---------------------------
-#  COPY ATTACHMENTS (preserve folder)
-# ---------------------------
-attachments_root="$SRC/attachments"
-if [ -d "$attachments_root" ]; then
-    while IFS= read -r -d '' img; do
-        rel="${img#$attachments_root/}"   # path under attachments
-        top="${rel%%/*}"
+done < <(find "$SRC" -mindepth 1 -maxdepth 1 -print0)
 
-        dest=""
-        if [[ -n "${MD_P1_TOPS[$top]:-}" ]]; then
-            dest="p1"
-        elif in_group "$top" "${GROUP1[@]}"; then
-            dest="p1"
-        elif in_group "$top" "${GROUP2[@]}"; then
-            dest="p2"
-        elif [[ "$top" == "DevOps" ]]; then
-            # Logic DevOps สำหรับรูปภาพ (ต้องเหมือน MD)
-            sub="$(echo "$rel" | cut -d/ -f2)"
-            
-            if in_group "$sub" "${GROUP2_DEVOPS[@]}"; then
-                dest="p2"
-            elif in_group "$sub" "${GROUP3_DEVOPS[@]}"; then
-                dest="p3"
-            else
-                dest="p4"
-            fi
-        else
-            dest="p2"
-        fi
+# 2. เริ่ม Process การย้ายลง part1, part2, part3...
+# (แก้ไขตรงนี้: เปลี่ยนจาก p เป็น part)
+mkdir -p "$DES/part$CURRENT_PART"
 
-        dest_path="$DES/$dest/attachments/$rel"
-        mkdir -p "$(dirname "$dest_path")"
-        cp "$img" "$dest_path"
-        printf "Copied IMG: %s -> %s\n" "$img" "$dest_path"
-    done < <(find "$attachments_root" -type f -print0)
-else
-    echo "No attachments folder at: $attachments_root (skipping attachments copy)"
-fi
+for item in "${MOVE_LIST[@]}"; do
+    # คำนวณขนาด
+    SIZE=$(get_total_size_kb "$item")
+    
+    # เช็คว่าถ้าใส่ item นี้ไปแล้วจะเกินโควต้าไหม?
+    NEW_TOTAL=$((CURRENT_SIZE_KB + SIZE))
+    
+    if [ "$CURRENT_SIZE_KB" -gt 0 ] && [ "$NEW_TOTAL" -gt "$MAX_SIZE_KB" ]; then
+        # (แก้ไขตรงนี้: เปลี่ยน Log และชื่อโฟลเดอร์เป็น part)
+        echo "📦 Part part$CURRENT_PART full ($((CURRENT_SIZE_KB/1024)) MB). Switching to part$((CURRENT_PART + 1))..."
+        CURRENT_PART=$((CURRENT_PART + 1))
+        CURRENT_SIZE_KB=0
+        mkdir -p "$DES/part$CURRENT_PART"
+    fi
 
-echo "✅ Copy complete. Output base: $DES"
+    # Copy ลง Part ปัจจุบัน
+    # (แก้ไขตรงนี้: ส่ง path เป็น part)
+    copy_item "$item" "$DES/part$CURRENT_PART"
+    
+    CURRENT_SIZE_KB=$((CURRENT_SIZE_KB + SIZE))
+done
+
+echo "------------------------------------------------"
+echo "✅ Done! Created $CURRENT_PART parts in '$DES'."
