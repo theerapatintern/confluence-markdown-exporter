@@ -225,9 +225,37 @@ process_md_file() {
 
     if [ -n "$table_buffer" ]; then echo "$table_buffer" >> "$output_file"; fi
     if [ "$in_admonition" -eq 1 ]; then echo ":::" >> "$output_file"; fi
-    
-    # Optional: Log per file details
-    # echo "Processing: $rel -> [Tasks:$count_inline_task Img:$count_image Lists:$count_html_list]"
+
+    local filename=$(basename "$input_file")
+    local file_key=$(normalize_key "$filename")
+    local author_name=""
+    if [ -n "$file_key" ]; then
+        author_name="${AUTHOR_MAP["$file_key"]:-}"
+    fi
+
+    if [ -n "$author_name" ] && [ "$author_name" != "Unknown" ]; then
+        local temp_final="${output_file}.final"
+        echo "**Created By:** $author_name" > "$temp_final"
+        echo "" >> "$temp_final"
+        echo "---" >> "$temp_final"
+        echo "" >> "$temp_final"
+        cat "$output_file" >> "$temp_final"
+        mv "$temp_final" "$output_file"
+    fi
+
+    # ==========================================
+    # [NEW LOGIC] RENAME FILE TO TITLE
+    # ==========================================
+    if [ -n "$extracted_title" ]; then
+        local new_filename="${extracted_title}.md"
+        local final_dir=$(dirname "$output_file")
+        local final_path="$final_dir/$new_filename"
+        
+        # เปลี่ยนชื่อไฟล์ถ้าชื่อไม่เหมือนเดิม
+        if [ "$output_file" != "$final_path" ]; then
+            mv "$output_file" "$final_path"
+        fi
+    fi
 }
 
 # ==========================================

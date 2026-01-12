@@ -1,0 +1,197 @@
+org.role.mod-full-stack-lead
+Riduwan MyOrder | riduwan.dev@myorder.ai
+Rungkrit Titachotnimit | rungkrit.dev@myorder.ai
+Sedsakol Kamolchote | sedsakol@myorder.ai
+Sukan Sittibamrungsuk | sukan@myorder.ai
+
+org.role.data-engineer
+Chawanwit Tanaraksak | chawanwit.data@myorder.ai
+Karan Developer MyOrder | karan.dev@myorder.ai
+Thanachit Sengsalee | thanachit.dev@myorder.ai
+
+org.role.pin-full-stack-developer
+Nonthawat Nilsonthi (Non) Fullstack MyOrder | nonthawat.dev@myorder.ai
+Uthen Sungun (Champ) FullStack MyOrder | uthen.dev@myorder.ai
+
+org.role.devops
+Kittipod Rungruang | kittipod.devops@myorder.ai
+Natthakit Na Nongkhai | natthakit@myorder.ai
+Poonnachit Amnuaypornpaisal | poonnachit.devops@myorder.ai
+Puripat Srisarn | puripat.devops@myorder.ai
+Supanut (Nut) DevOps MyOrder | supanut.devops@myorder.ai
+Tanetphon Seangparnkaew | tanetphon.devops@myorder.ai
+
+org.role.ui-developer
+Hataichanok Kochsena | hataichanok@myorder.ai
+Laddawal Kongwong | laddawal.dev@myorder.ai
+Ployphuk Youzo | ployphuk@myorder.ai
+
+org.role.engineering-manager
+Apipol Sukgler (Golf) MyOrder | apipol@myorder.ai
+Charanchai Thongkham | charanchai@myorder.ai
+
+org.role.ai-engineer
+Kittinun Yenyueak | kittinun.aiml@myorder.ai
+krittapa...@myorder.ai | krittapas.intern@myorder.ai
+Naphat Khoprasertthaworn | naphat.aiml@myorder.ai
+Pakavin Buacheun | pakavin@myorder.ai
+Sibthinon Kruesri | sibthinon@myorder.ai
+Thirasan Chatwongwan | thirasan.aiml@myorder.ai
+
+org.role.pin-full-stack-lead
+Arnan Srisuntisuk | arnan@myorder.ai
+
+org.role.mxp-full-stack-developer@myorder.ai
+Nantinee Bew Fullstack MyOrder | nantinee.dev@myorder.ai
+Pakorn Boodtayak Fullstack Developer | pakorn.dev@myorder.ai
+Pongsatorn Arunrat | pongsatorn.dev@myexpress.ai
+Thanapong Chodchoi (Yumat) Fullstack Developer | thanapong.dev@myexpress.ai
+
+org.role.ux-ui
+Jiraporn Keawkaew | jiraporn.uxui@myorder.ai
+Jittima Pisanuvoramate | jittima@myorder.ai
+Nitchakarn Luechaichalermsook | nitchakarn.uxui@myorder.ai
+Pasin Kansith (Pream) UX/UI MyOrder | pasin.ux-ui@myorder.ai
+Tapanee UX/UI MyOrder | tapanee.ux-ui@myorder.ai
+
+org.role.business-analysis
+apis...@myorder.ai | apisit.ba@myorder.ai
+Jirawat Limawiratchaphong | jirawat.ba@myorder.ai
+Khetsophon Chapha (TangNam) BA MyOrder | khetsophon.ba@myorder.ai
+Parinya Pankham | parinya.ba@myorder.ai
+Pornnapa Saramat | pornnapa@myorder.ai
+Sasida Hinthong | sasida@myorder.ai
+Weradaj Jujome (First) MyOrder | weradaj.ba@myorder.ai
+Yanika BA | yanika.ba@myorder.ai
+
+org.role.c-level
+Phattharaphon (Wine) Sriwichai
+Sompob Chanintornpipat
+Supakit Prasertmak
+Titipong Bootpim
+Traiwit Buakhow
+
+org.role.data-engineer-lead
+Chawanwit Tanaraksak | chawanwit.data@myorder.ai
+
+org.role.mod-full-stack-developer
+Anan Mingmitpattanakul | anan@myorder.ai
+Aphidech Mahakoat | aphidech.intern@myorder.ai
+Apirati Kottharin | apirati.intern@myorder.ai
+Chanachon Danpreeda | chanachon@myorder.ai
+Chutinut Jirasritana-anan (Gift) Fullstack MyOrder | chutinut.dev@myorder.ai
+Intuon Nimthong | intuon@myorder.ai
+Jirateep loyma | jirateep.dev@myorder.ai
+Kittipoom Yuttanava | kittipoom@myorder.ai
+Kochchamonwan Sombunkun | kochcha.intern@myorder.ai
+Kunanon Samansin | kunanon.dev@myorder.ai
+Kunanont Rungrujee | kunanont@myorder.ai
+Monnat Phanchaipol | monnat.dev@myorder.ai
+Nakit Chanchang (Mee) Fullstack MyOrder | nakit.dev@myorder.ai
+Nattapong Nakcharin | nattapong.dev@myorder.ai
+Natthawat Singkala (Benz) Fullstack MyOrder | natthawat.dev@myorder.ai
+Nawin Sundaraketu | nawin.dev@myorder.ai
+Nuttavich Sirivijitkul | nuttavich.dev@myorder.ai
+Panurat Sutigoolabud | panurat.dev@myorder.ai
+Phongphat Promprasert | phongphat.intern@myorder.ai
+Rachata Khawngam | rachata@myorder.ai
+ruttanap...@myorder.ai | ruttanapon.intern@myorder.ai
+Sahaphap Ritnatikul | sahaphap.intern@myorder.ai
+setthawu...@myorder.ai | setthawut.intern@myorder.ai
+Sibthinon Kruesri | sibthinon.intern@myorder.ai
+Sirichai Khuadkaewmanee | sirichai.dev@myorder.ai
+Siwakorn Boonpamee | siwakorn.dev@myorder.ai
+Sorrawit Sangmanee | sorrawit@myorder.ai
+Sulhee Sama-alee | sulhee.intern@myorder.ai
+Surapitch Kongthong | surapitch.intern@myorder.ai
+Tanakon Viratmongkolchai | tanakon.dev@myorder.ai
+Thanaphat Ketsani | thanaphat.intern@myorder.ai
+
+org.role.account
+Gridsanapong Boonthong | gridsanapong.acc@myorder.ai
+Kunthida Chinnawong | kunthida@myorder.ai
+Nattarika Rueandee | nattarika@myorder.ai
+Nitida Yonprasert | nitida@myorder.ai
+pimcha...@myorder.ai | pimchanok.ja@myorder.ai
+suratwa...@myorder.ai | suratwadee.acc@myorder.ai
+Suwannee Taeprasert | suwannee@myorder.ai
+accountant prk | accountant.prk@myorder.ai
+chamin Aongsara | chamin.acc@myorder.ai
+
+org.role.data-analyst
+Kasidet MyOrder | kasidet.data@myorder.ai
+
+org.role.human-resource
+Panyaporn (Faii) HR MyOrder | panyaporn.hr@myorder.ai
+Papangkorn (Gear) HR MyOrder | papangkorn.hr@myorder.ai
+
+org.role.admin
+Adisorn Seehabut | adisorn.admin@myorder.ai
+Chavankorn Thaneerat | chavankorn@myorder.ai
+Kitsanaphon Chanrueangsri | kitsanaphon.admin@myorder.ai
+Kittinan Seaung | kittinan.admin@myorder.ai
+Kritsada Larpa | kritsada.admin@myorder.ai
+Mawin Mathuros | mawin.admin@myorder.ai
+Nampai Hongsawat | nampai.admin@myorder.ai
+Nawaphon Phophan | nawaphon.admin@myorder.ai
+Nisith Nichapun | nisith@myorder.ai
+nopp...@myorder.ai | noppakorn@myorder.ai
+Nuttapong Butpim | nuttapong@myorder.ai
+Paramesnakorn Tongsong | paramesnakorn@myorder.ai
+Pongsakorn Saekang | pongsakorn.admin@myorder.ai
+Pongsapat Ghomrat | pongsapat.admin@myorder.ai
+Punchung Khuntakul (Admin Phuket) | punchung.admin@myorder.ai
+Sujittra Passakarn | sujittra@myorder.ai
+Tanawit Jansing | tanawit.admin@myorder.ai
+Thinnapat Sriboonlue | thinnapat.admin@myorder.ai
+Thitinan Aintharaprasat | thitinan.admin@myorder.ai
+Tinotai Chaiyamart | tinotai.admin@myorder.ai
+Vorapop Koudom | vorapop@myorder.ai
+Wiroj Nilnark | wiroj.admin@myorder.ai
+panida chatbanyong | panida.admin@myorder.ai
+
+org.role.product-owner
+Sasida Hinthong | sasida@myorder.ai
+Yanika BA | yanika.ba@myorder.ai
+
+org.role.claim
+Dusita Onkhoksung | dusita.claim@myorder.ai
+supakan Maneesri | supakan@myorder.ai
+
+org.role.technical-lead
+Kanin Sirisith | kanin@myorder.ai
+
+org.role.finance
+Alisa Nasra Balidede | alisa@myorder.ai
+Kasidit Kerdsat | kasidit@myorder.ai
+Pennapa Saelim | pennapa@myorder.ai
+Supanin Laroung | supanin@myorder.ai
+Supansa Somporn | supansa@myorder.ai
+Tararat Supap | tararat@myorder.ai
+
+org.role.mxp-full-stack-lead@myorder.ai
+Sompob Chanintornpipat | sompob@myorder.ai
+
+org.role.devops.intern
+Jessada Naka | jessada@myorder.ai
+Kittipod Rungruang | kittipod.devops@myorder.ai
+Nathawat Suwannarin | nathawat.intern@myorder.ai
+Natthakit Na Nongkhai | natthakit@myorder.ai
+Poonnachit Amnuaypornpaisal | poonnachit.devops@myorder.ai
+Puripat Srisarn | puripat.devops@myorder.ai
+Supanut (Nut) DevOps MyOrder | supanut.devops@myorder.ai
+Tanetphon Seangparnkaew | tanetphon.devops@myorder.ai
+Theerapat Manamingmongkol | theerapat@myorder.ai
+
+org.role.general-manager
+Sarawut (Bill) MyExpress | sarawut@myexpress.ai
+
+org.role.sale
+Bunthiya Ridburee | bunthiya.sale@myorder.ai
+Darunphath Pattharragaitraphee | darunphath.sale@myexpress.ai
+Duangkamon Singngoen | duangkamon.sale@myorder.ai
+Jenjira Thainikom | jenjira.sale@myorder.ai
+Phattharasaya Tuna | phattharasaya.sale@myorder.ai
+Sarun Sale MyExpress | sarun.sale@myexpress.ai
+Thikamporn Sale MyExpress | thikamporn.sale@myexpress.ai
+Yanapong Sophonpun | yanapong.sale@myorder.ai

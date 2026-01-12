@@ -2,10 +2,10 @@
 
 # ================= CONFIGURATION =================
 DOMAIN="https://outline-dev.myorder.dev"
-TOKEN="ol_api_bJF3MBaNFmK5VGNo3eA5SdNMJIqemoCGpz6hlW"
+TOKEN=""
 
 TARGET_COLLECTIONS=("part1" "part2" "part3" "part4" "part5" "part6")
-NO_PARENT_NAME="No Parent"  # ชื่อ Collection สำหรับไฟล์ที่ไม่มี Folder ครอบ
+NO_PARENT_NAME="General"  # ชื่อ Collection สำหรับไฟล์ที่ไม่มี Folder ครอบ
 # =================================================
 
 API_URL="${DOMAIN}/api"

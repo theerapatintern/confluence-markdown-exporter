@@ -2,7 +2,7 @@
 
 # ================= CONFIGURATION =================
 DOMAIN="https://outline-dev.myorder.dev"
-TOKEN="ol_api_bJF3MBaNFmK5VGNo3eA5SdNMJIqemoCGpz6hlW"
+TOKEN=""
 SKIP_NAME="Welcome"  # 👈 ชื่อ Collection ที่ต้องการยกเว้นการลบ
 # =================================================
 

@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# ไฟล์ list page IDs
-FILE="url_list.txt"
-# Path ไปยัง Script สำหรับ Activate Venv
-VENV_ACTIVATE_SCRIPT="./venv/bin/activate" 
+# ================= CONFIGURATION =================
+FILE="url_list_2.txt"
+VENV_ACTIVATE_SCRIPT="./venv/bin/activate"
+OUTPUT_DIR="output"  # <--- ระบุชื่อโฟลเดอร์ Output ที่ต้องการลบ
+# =================================================
 
 # ตรวจสอบว่าไฟล์รายชื่อ Page IDs อยู่หรือไม่
 if [ ! -f "$FILE" ]; then
@@ -22,6 +23,21 @@ else
     echo "Please ensure the venv is created and the package is installed with 'pip install -e .' "
     exit 1
 fi
+
+# =================================================
+# 🧹 CLEANUP OLD OUTPUT
+# =================================================
+if [ -d "$OUTPUT_DIR" ]; then
+    echo "🧹 Cleaning old output directory: $OUTPUT_DIR"
+    # rm -rf "$OUTPUT_DIR"
+fi
+# สร้างโฟลเดอร์ใหม่รอไว้ (ถ้า cf-export สร้างเองอยู่แล้ว บรรทัดนี้อาจไม่จำเป็น แต่ใส่ไว้กันเหนียว)
+# mkdir -p "$OUTPUT_DIR" 
+
+# =================================================
+# 🚀 START EXPORT
+# =================================================
+echo "🚀 Starting export process..."
 
 while IFS= read -r page_id || [ -n "$page_id" ]; do
     page_id=$(echo "$page_id" | xargs)  # ตัดช่องว่าง
