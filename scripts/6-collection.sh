@@ -60,7 +60,7 @@ get_or_create_collection_id() {
 
     # ถ้าหาไม่เจอจริงๆ ค่อยสร้าง Collection ใหม่
     SAFE_TITLE=$(echo "$clean_target_name" | sed 's/"/\\"/g')
-    CREATE_RES=$(api_post "collections.create" "{\"name\": \"$SAFE_TITLE\", \"permission\": \"read\", \"description\": \"Auto-generated\"}")
+    CREATE_RES=$(api_post "collections.create" "{\"name\": \"$SAFE_TITLE\", \"permission\": \"read\", \"description\": \"Overview\"}")
     NEW_ID=$(echo "$CREATE_RES" | jq -r '.data.id')
     
     if [ -n "$NEW_ID" ] && [ "$NEW_ID" != "null" ]; then

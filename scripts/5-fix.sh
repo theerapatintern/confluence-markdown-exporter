@@ -1,19 +1,61 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
 # ==========================================
 # CONFIGURATION
 # ==========================================
-# INPUT_DIR: โฟลเดอร์ต้นทางที่เก็บไฟล์ดิบ (เช่น p1, p2 ที่ export มา)
-INPUT_DIR="migrate/parts" 
-
-# OUTPUT_DIR: โฟลเดอร์ปลายทางสำหรับไฟล์ที่แก้ไขเสร็จแล้ว (พร้อม migrate)
+INPUT_DIR="migrate/parts"
 OUTPUT_DIR="migrate/ready_to_import"
+AUTHOR_FILE="creator_report.txt"
+
+# ==========================================
+# FUNCTION: NORMALIZE KEY
+# ==========================================
+normalize_key() {
+    local str="$1"
+    echo "$str" \
+        | sed 's/\.md$//' \
+        | sed 's/[^a-zA-Z0-9ก-๙]//g' \
+        | tr '[:upper:]' '[:lower:]'
+}
+
+# ==========================================
+# LOAD AUTHOR MAP
+# ==========================================
+declare -A AUTHOR_MAP
+
+if [ -f "$AUTHOR_FILE" ]; then
+    echo "📖 Loading authors from $AUTHOR_FILE..."
+    while IFS= read -r line; do
+        # ข้ามบรรทัดว่าง
+        [ -z "$line" ] && continue
+
+        # ใช้ sed ดึงส่วนที่เป็นชื่อผู้แต่ง (ข้อความหลัง : ตัวสุดท้าย)
+        author=$(echo "$line" | sed 's/.*: //')
+
+        # ใช้ sed ดึงส่วนที่เป็น Title (ตัด : และชื่อผู้แต่งตอนท้ายออก)
+        title=$(echo "$line" | sed "s/: $author$//")
+
+        # Normalize Key
+        key=$(normalize_key "$title")
+
+        # Clean Author Name
+        clean_author="$(echo "$author" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+        if [ -n "$key" ]; then
+            AUTHOR_MAP["$key"]="$clean_author"
+            # echo "Debug: Key=$key | Author=$clean_author"
+        fi
+    done < "$AUTHOR_FILE"
+    echo "   Loaded ${#AUTHOR_MAP[@]} authors into memory."
+else
+    echo "⚠️  Warning: Author file '$AUTHOR_FILE' not found."
+fi
 
 # ==========================================
 # AUTO-DETECT PARTS
 # ==========================================
-# ตรวจสอบว่ามี Input Dir จริงไหม
 if [ ! -d "$INPUT_DIR" ]; then
     echo "❌ Error: Input directory '$INPUT_DIR' not found."
     exit 1
@@ -21,15 +63,13 @@ fi
 
 echo "🔍 Detecting parts in '$INPUT_DIR'..."
 PARTS=()
-# ใช้ find หาเฉพาะ Directory ชั้นแรก (maxdepth 1)
 while IFS= read -r -d '' dir; do
-    # ตัด path ออกเอาแค่ชื่อ folder (เช่น p1, p2)
     part_name="$(basename "$dir")"
     PARTS+=("$part_name")
 done < <(find "$INPUT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
 if [ ${#PARTS[@]} -eq 0 ]; then
-    echo "⚠️  Warning: No parts (subdirectories) found in '$INPUT_DIR'."
+    echo "⚠️  Warning: No parts found in '$INPUT_DIR'."
     exit 0
 fi
 
@@ -56,11 +96,11 @@ map_type() {
     local type_gfm="$1"
     case "$type_gfm" in
         IMPORTANT) echo "info" ;;
-        WARNING) echo "warning" ;;
-        CAUTION) echo "warning" ;;
-        TIP) echo "success" ;;
-        NOTE) echo "tip" ;;
-        *) echo "info" ;;
+        WARNING)   echo "warning" ;;
+        CAUTION)   echo "warning" ;;
+        TIP)       echo "success" ;;
+        NOTE)      echo "tip" ;;
+        *)         echo "info" ;;
     esac
 }
 
@@ -70,7 +110,7 @@ process_md_file() {
     local output_file="$3"
 
     mkdir -p "$(dirname "$output_file")"
-    : > "$output_file"
+    : > "$output_file" # Clear file
 
     local in_admonition=0
     local count_admonition=0
@@ -79,12 +119,16 @@ process_md_file() {
     local count_details=0
     local count_html_list=0
     local count_inline_task=0
-    
+
     local line_num=0
     local in_tags_block=0
     local table_buffer=""
     local regex_details="</?(details|summary)>"
 
+    # [NEW] ตัวแปรสำหรับเก็บ Title ที่เจอ
+    local extracted_title=""
+
+    # --- MAIN PROCESSING LOOP ---
     while IFS= read -r line || [ -n "$line" ]; do
         line="${line//$'\r'/}"
         line_num=$((line_num+1))
@@ -105,10 +149,9 @@ process_md_file() {
                     write_line=0
                 fi
             fi
-            # Handle Breadcrumb / Navigation Links
             if [ "$write_line" -eq 1 ] && [[ "$line" =~ \[.*\]\(.*\.md\) ]]; then
                 if [[ "$line" == *">"* ]] || [[ "$line" =~ ^\[\]\(.*\.md\) ]]; then
-                     write_line=0
+                    write_line=0
                 fi
                 trimmed_line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
                 if [[ "$trimmed_line" =~ ^\[.*\]\(.*\.md\)$ ]]; then
@@ -119,25 +162,36 @@ process_md_file() {
 
         if [ "$write_line" -eq 0 ]; then continue; fi
 
+        # ==========================================
+        # [NEW LOGIC] EXTRACT TITLE AND REMOVE LINE
+        # ==========================================
+        # ถ้ายังไม่เจอ Title และเจอบรรทัดที่ขึ้นต้นด้วย # (H1)
+        if [ -z "$extracted_title" ] && [[ "$line" =~ ^#[[:space:]]+(.+) ]]; then
+            # ดึงข้อความหลัง # ออกมา
+            raw_title="${BASH_REMATCH[1]}"
+            # ลบตัวอักษรที่ห้ามมีในชื่อไฟล์ (เช่น /) และตัดช่องว่างหน้าหลัง
+            extracted_title="$(echo "$raw_title" | tr -d '/' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+            # ข้ามบรรทัดนี้ไปเลย (ไม่เขียนลงไฟล์) -> เท่ากับลบ Title ออกจากเนื้อหา
+            continue
+        fi
+        # ==========================================
+
         # --- CLEANUP LOGIC ---
-        
-        # Inline Task Lists
+
         if [[ "$line" == *"inline-task-list"* ]]; then
-             line="$(echo "$line" | perl -pe 's{<ul class="inline-task-list"[^>]*><li[^>]*><span[^>]*>(.*?)</span></li></ul>}{- [ ] $1}g')"
-             line="$(echo "$line" | sed -E 's/<\/?code>//g')"
-             count_inline_task=$((count_inline_task+1))
+            line="$(echo "$line" | perl -pe 's{<ul class="inline-task-list"[^>]*><li[^>]*><span[^>]*>(.*?)</span></li></ul>}{- [ ] $1}g')"
+            line="$(echo "$line" | sed -E 's/<\/?code>//g')"
+            count_inline_task=$((count_inline_task+1))
         fi
 
-        # General Text
         line="${line//\\_/_}"
         line="${line//<br\/>/<br>}"
 
-        # Clean Unicode Headers
         if [[ "$line" == *"\\u"* ]]; then
             line="$(echo "$line" | sed -E 's/^([#[:space:]]*)(\\u[0-9a-fA-F]{4})+[[:space:]]*/\1/g')"
         fi
 
-        # Remove details/summary
         if [[ "$line" =~ $regex_details ]]; then
             line="$(echo "$line" | sed -E 's/<\/?(details|summary)>//g')"
             count_details=$((count_details+1))
@@ -161,7 +215,6 @@ process_md_file() {
             if [ -n "$table_buffer" ]; then echo "$table_buffer" >> "$output_file"; table_buffer=""; fi
         fi
 
-        # Clean HTML Lists (<ul>)
         if [[ "$line" == *"<ul>"* ]]; then
             line="$(echo "$line" | sed -E 's/<\/?ul>//g')"
             line="$(echo "$line" | sed -E 's/<li><p>/ * /g')"
@@ -170,7 +223,6 @@ process_md_file() {
             count_html_list=$((count_html_list+1))
         fi
 
-        # Clean HTML Lists (<ol>) inside tables
         if [[ "$line" == *"|"* ]] && [[ "$line" == *"<ol"* ]]; then
             line="$(echo "$line" | perl -pe '
                 if (m/\|.*<ol/) {
@@ -182,15 +234,28 @@ process_md_file() {
             ')"
         fi
 
-        # Images & Paths
+        # ==========================================
+        # Images & Videos Path Fixing & Double Newline
+        # ==========================================
+
+        # 1. Image Cleanup
         if [[ "$line" == *"!"* ]]; then
-            line="$(echo "$line" | sed -E 's/!\[[^]]*\]\(([^)]+)\)/![](\1)/g')"
+            line="$(echo "$line" | perl -pe 's{!\[[^]]*\]\(}{![](}g')"
             count_image=$((count_image+1))
-            line="$(echo "$line" | perl -pe 's{(?:\.\./)*attachments/(?:.+?/)*([^/\)]+\.(?:png|jpg|jpeg|gif))}{uploads/$1}gi')"
+        fi
+
+        # 2. Path Replacement
+        if [[ "$line" == *"attachments/"* ]]; then
+            line="$(echo "$line" | perl -pe 's{(?:\.\./)*attachments/.*?/([^/)]+\.(?:png|jpg|jpeg|gif|mp4|mov|pdf|zip|docx|xlsx))}{uploads/$1}gi')"
             count_path=$((count_path+1))
         fi
 
-        # Admonitions in Tables
+        # 3. Split Lines (Double Newline)
+        if [[ "$line" == *"uploads/"* ]]; then
+            line="$(echo "$line" | perl -pe 's{(\]\(uploads/[^)]+\))(?=\s*(?:!|\[))}{$1\n\n}g')"
+        fi
+        # ==========================================
+
         if [[ "$line" == *"|"* ]] && [[ "$line" == *"> [!"* ]]; then
             line="$(echo "$line" | perl -pe '
                 BEGIN { %m=("IMPORTANT"=>"info","WARNING"=>"warning","CAUTION"=>"warning","TIP"=>"success","NOTE"=>"tip"); }
@@ -198,7 +263,6 @@ process_md_file() {
             ')"
         fi
 
-        # Admonitions Block
         TYPE_GFM="$(echo "$line" | sed -nE 's/^>[[:space:]]*\[!(IMPORTANT|WARNING|CAUTION|TIP|NOTE)\][[:space:]]*$/\1/p')"
         if [ -n "$TYPE_GFM" ]; then
             if [ "$in_admonition" -eq 1 ]; then echo ":::" >> "$output_file"; echo "" >> "$output_file"; fi
@@ -250,7 +314,7 @@ process_md_file() {
         local new_filename="${extracted_title}.md"
         local final_dir=$(dirname "$output_file")
         local final_path="$final_dir/$new_filename"
-        
+
         # เปลี่ยนชื่อไฟล์ถ้าชื่อไม่เหมือนเดิม
         if [ "$output_file" != "$final_path" ]; then
             mv "$output_file" "$final_path"
@@ -276,22 +340,22 @@ for part in "${PARTS[@]}"; do
     mkdir -p "$DST"
     mkdir -p "$DST/uploads"
 
-    # 1) Copy images (flatten structure)
     ATT_ROOT="$SRC/attachments"
     if [ -d "$ATT_ROOT" ]; then
-        echo "📸 Copying images from $ATT_ROOT -> $DST/uploads"
-        # ใช้ find + cp เพื่อความชัวร์เรื่อง subdirectories ใน attachments
+        echo "📸 Copying media (images/videos/files) from $ATT_ROOT -> $DST/uploads"
         while IFS= read -r -d '' img; do
             base="$(basename "$img")"
-            # ใช้ -n เพื่อไม่ให้ overwrite ถ้าชื่อซ้ำ (หรือลบ -n ออกถ้าอยากให้ทับ)
             cp -n "$img" "$DST/uploads/$base"
-        done < <(find "$ATT_ROOT" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.gif' \) -print0)
+        done < <(find "$ATT_ROOT" -type f \( \
+            -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.gif' \
+            -o -iname '*.mp4' -o -iname '*.mov' -o -iname '*.pdf' \
+            -o -iname '*.zip' -o -iname '*.docx' -o -iname '*.xlsx' \
+            \) -print0)
     else
         echo "   No attachments folder found in $SRC"
     fi
 
-    # 2) Process .md files
-    echo "📝 Processing .md files..."
+    echo "📝 Processing .md files (Injecting Authors)..."
     count_files=0
     while IFS= read -r -d '' mdfile; do
         rel="${mdfile#$SRC/}"
@@ -299,7 +363,7 @@ for part in "${PARTS[@]}"; do
         process_md_file "$mdfile" "$rel" "$out"
         count_files=$((count_files+1))
     done < <(find "$SRC" -type f -name "*.md" -print0)
-    
+
     echo "   Processed $count_files Markdown files."
 done
 

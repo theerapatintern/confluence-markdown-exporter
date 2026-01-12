@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- CONFIGURATION ---
-SRC="output"
-DES="migrate/parts"
+SRC="output_new"
+DES="migrate_new/parts"
 MAX_SIZE_MB=100
 # แปลง MB เป็น KB (1024 KB = 1 MB)
 MAX_SIZE_KB=$((MAX_SIZE_MB * 1024))

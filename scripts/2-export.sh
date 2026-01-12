@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ================= CONFIGURATION =================
-FILE="url_list_2.txt"
+FILE="url_list.txt"
 VENV_ACTIVATE_SCRIPT="./venv/bin/activate"
 OUTPUT_DIR="output"  # <--- ระบุชื่อโฟลเดอร์ Output ที่ต้องการลบ
 # =================================================
@@ -29,7 +29,7 @@ fi
 # =================================================
 if [ -d "$OUTPUT_DIR" ]; then
     echo "🧹 Cleaning old output directory: $OUTPUT_DIR"
-    # rm -rf "$OUTPUT_DIR"
+    rm -rf "$OUTPUT_DIR"
 fi
 # สร้างโฟลเดอร์ใหม่รอไว้ (ถ้า cf-export สร้างเองอยู่แล้ว บรรทัดนี้อาจไม่จำเป็น แต่ใส่ไว้กันเหนียว)
 # mkdir -p "$OUTPUT_DIR" 
