@@ -2,16 +2,28 @@
 
 set -euo pipefail
 
-# ==========================================
-# CONFIGURATION
-# ==========================================
-INPUT_DIR="migrate/parts"
-OUTPUT_DIR="migrate/ready_to_import"
-AUTHOR_FILE="creator_report.txt"
+# Step 1: โหลดค่า Config จากไฟล์ .env
+ENV_FILE=".env"
+
+if [ -f "$ENV_FILE" ]; then
+    echo "⚙️  Loading configuration from .env..."
+    set -a
+    source "$ENV_FILE"
+    set +a
+else
+    echo "⚠️  Warning: .env file not found. Using default values."
+fi
+
+# กำหนดค่าเริ่มต้น (เผื่อใน .env ลืมใส่มา)
+INPUT_DIR="${MIGRATE_PARTS_DIR:-migrate/parts}"          # โฟลเดอร์ต้นทาง (ที่แบ่ง part แล้ว)
+OUTPUT_DIR="${MIGRATE_READY_DIR:-migrate/ready_to_import}" # โฟลเดอร์ปลายทาง (พร้อม Import)
+AUTHOR_FILE="${CREATOR_REPORT_FILE:-creator_report.txt}"   # ไฟล์จับคู่ชื่อคน
 
 # ==========================================
-# FUNCTION: NORMALIZE KEY
+# HELPER FUNCTIONS
 # ==========================================
+
+# Step 2: เตรียมฟังก์ชันสำหรับจัดการ Text (Normalize & Clean)
 normalize_key() {
     local str="$1"
     echo "$str" \
@@ -20,32 +32,45 @@ normalize_key() {
         | tr '[:upper:]' '[:lower:]'
 }
 
-# ==========================================
-# LOAD AUTHOR MAP
-# ==========================================
+# ฟังก์ชันล้างชื่อไฟล์ (ป้องกันอักขระแปลกปลอม เช่น \_)
+clean_filename() {
+    local str="$1"
+    # เปลี่ยน \_ เป็น _ และลบ \ อื่นๆ ที่ไม่จำเป็น
+    echo "$str" | sed 's/\\_/_/g' | sed 's/\\//g'
+}
+
+map_type() {
+    local type_gfm="$1"
+    case "$type_gfm" in
+        IMPORTANT) echo "info" ;;
+        WARNING)   echo "warning" ;;
+        CAUTION)   echo "warning" ;;
+        TIP)       echo "success" ;;
+        NOTE)      echo "tip" ;;
+        *)         echo "info" ;;
+    esac
+}
+
+
+# Step 3: โหลดข้อมูลผู้แต่ง (Author) เข้า Memory
+# เพื่อเอาไว้แปะท้ายไฟล์ว่าใครเป็นคนเขียน (Created By: ...)
 declare -A AUTHOR_MAP
 
 if [ -f "$AUTHOR_FILE" ]; then
     echo "📖 Loading authors from $AUTHOR_FILE..."
     while IFS= read -r line; do
-        # ข้ามบรรทัดว่าง
         [ -z "$line" ] && continue
 
-        # ใช้ sed ดึงส่วนที่เป็นชื่อผู้แต่ง (ข้อความหลัง : ตัวสุดท้าย)
+        # แกะชื่อผู้แต่งและ Title
         author=$(echo "$line" | sed 's/.*: //')
-
-        # ใช้ sed ดึงส่วนที่เป็น Title (ตัด : และชื่อผู้แต่งตอนท้ายออก)
         title=$(echo "$line" | sed "s/: $author$//")
 
-        # Normalize Key
+        # สร้าง Key สำหรับ map
         key=$(normalize_key "$title")
-
-        # Clean Author Name
         clean_author="$(echo "$author" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
         if [ -n "$key" ]; then
             AUTHOR_MAP["$key"]="$clean_author"
-            # echo "Debug: Key=$key | Author=$clean_author"
         fi
     done < "$AUTHOR_FILE"
     echo "   Loaded ${#AUTHOR_MAP[@]} authors into memory."
@@ -53,9 +78,7 @@ else
     echo "⚠️  Warning: Author file '$AUTHOR_FILE' not found."
 fi
 
-# ==========================================
-# AUTO-DETECT PARTS
-# ==========================================
+# Step 4: สแกนหา Part ทั้งหมดใน Input Directory
 if [ ! -d "$INPUT_DIR" ]; then
     echo "❌ Error: Input directory '$INPUT_DIR' not found."
     exit 1
@@ -75,9 +98,7 @@ fi
 
 echo "✅ Found ${#PARTS[@]} parts: ${PARTS[*]}"
 
-# ==========================================
-# SAFETY & CLEANUP
-# ==========================================
+# Step 5: ล้างโฟลเดอร์ปลายทางให้สะอาดก่อนเริ่มงาน
 if [ -z "$OUTPUT_DIR" ] || [ "$OUTPUT_DIR" = "/" ]; then
     echo "❌ Error: Bad OUTPUT_DIR ($OUTPUT_DIR). Aborting."
     exit 1
@@ -89,21 +110,8 @@ if [ -d "$OUTPUT_DIR" ]; then
 fi
 mkdir -p "$OUTPUT_DIR"
 
-# ==========================================
-# HELPER FUNCTIONS
-# ==========================================
-map_type() {
-    local type_gfm="$1"
-    case "$type_gfm" in
-        IMPORTANT) echo "info" ;;
-        WARNING)   echo "warning" ;;
-        CAUTION)   echo "warning" ;;
-        TIP)       echo "success" ;;
-        NOTE)      echo "tip" ;;
-        *)         echo "info" ;;
-    esac
-}
 
+# Step 6: ฟังก์ชันแปลงไฟล์ Markdown ทีละไฟล์
 process_md_file() {
     local input_file="$1"
     local rel="$2"
@@ -112,29 +120,23 @@ process_md_file() {
     mkdir -p "$(dirname "$output_file")"
     : > "$output_file" # Clear file
 
+    # ตัวแปรสถานะต่างๆ
     local in_admonition=0
-    local count_admonition=0
-    local count_image=0
-    local count_path=0
-    local count_details=0
-    local count_html_list=0
-    local count_inline_task=0
-
     local line_num=0
     local in_tags_block=0
     local table_buffer=""
     local regex_details="</?(details|summary)>"
 
-    # [NEW] ตัวแปรสำหรับเก็บ Title ที่เจอ
+    # ตัวแปรเก็บ Title ใหม่ที่ดึงจาก H1 (# Title)
     local extracted_title=""
 
-    # --- MAIN PROCESSING LOOP ---
+    # --- อ่านไฟล์ทีละบรรทัด ---
     while IFS= read -r line || [ -n "$line" ]; do
         line="${line//$'\r'/}"
         line_num=$((line_num+1))
         local write_line=1
 
-        # --- PREPROCESSING (Header/Frontmatter) ---
+        # 6.1: จัดการ Frontmatter (ส่วนหัวไฟล์ที่มี ---)
         if [ "$line_num" -le 20 ]; then
             if [[ "$line" =~ ^---$ ]]; then
                 if [ "$in_tags_block" -eq 1 ]; then in_tags_block=0; fi
@@ -149,6 +151,7 @@ process_md_file() {
                     write_line=0
                 fi
             fi
+            # ลบ Link แปลกๆ ที่ Outline ไม่รองรับ
             if [ "$write_line" -eq 1 ] && [[ "$line" =~ \[.*\]\(.*\.md\) ]]; then
                 if [[ "$line" == *">"* ]] || [[ "$line" =~ ^\[\]\(.*\.md\) ]]; then
                     write_line=0
@@ -162,42 +165,44 @@ process_md_file() {
 
         if [ "$write_line" -eq 0 ]; then continue; fi
 
-        # ==========================================
-        # [NEW LOGIC] EXTRACT TITLE AND REMOVE LINE
-        # ==========================================
-        # ถ้ายังไม่เจอ Title และเจอบรรทัดที่ขึ้นต้นด้วย # (H1)
+        # 6.2: ดึงชื่อไฟล์จาก H1 (# Title) และลบบรรทัดนั้นทิ้ง
+        # เอาชื่อนี้ไปตั้งเป็นชื่อไฟล์ตอนท้าย
         if [ -z "$extracted_title" ] && [[ "$line" =~ ^#[[:space:]]+(.+) ]]; then
-            # ดึงข้อความหลัง # ออกมา
             raw_title="${BASH_REMATCH[1]}"
-            # ลบตัวอักษรที่ห้ามมีในชื่อไฟล์ (เช่น /) และตัดช่องว่างหน้าหลัง
-            extracted_title="$(echo "$raw_title" | tr -d '/' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            
+            # Clean ชื่อให้ปลอดภัย
+            clean_t="$(echo "$raw_title" | tr -d '/' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            
+            # เรียกใช้ฟังก์ชัน clean_filename (แก้บั๊ก \_)
+            extracted_title=$(clean_filename "$clean_t")
 
-            # ข้ามบรรทัดนี้ไปเลย (ไม่เขียนลงไฟล์) -> เท่ากับลบ Title ออกจากเนื้อหา
+            # ข้ามบรรทัดนี้ไปเลย (ไม่เขียนลงไฟล์)
             continue
         fi
-        # ==========================================
 
-        # --- CLEANUP LOGIC ---
-
+        # 6.3: ทำความสะอาด HTML 
+        # แก้ Task List
         if [[ "$line" == *"inline-task-list"* ]]; then
             line="$(echo "$line" | perl -pe 's{<ul class="inline-task-list"[^>]*><li[^>]*><span[^>]*>(.*?)</span></li></ul>}{- [ ] $1}g')"
             line="$(echo "$line" | sed -E 's/<\/?code>//g')"
-            count_inline_task=$((count_inline_task+1))
         fi
 
+        # แก้ Underscore และ Break line
         line="${line//\\_/_}"
         line="${line//<br\/>/<br>}"
 
+        # แก้ Unicode หลุด
         if [[ "$line" == *"\\u"* ]]; then
             line="$(echo "$line" | sed -E 's/^([#[:space:]]*)(\\u[0-9a-fA-F]{4})+[[:space:]]*/\1/g')"
         fi
 
+        # ลบ Details/Summary tag
         if [[ "$line" =~ $regex_details ]]; then
             line="$(echo "$line" | sed -E 's/<\/?(details|summary)>//g')"
-            count_details=$((count_details+1))
         fi
 
-        # --- TABLE BUFFERING ---
+        # 6.4: จัดการตาราง 
+        # ต้องรวมบรรทัดตารางเข้าด้วยกันเพื่อให้ Markdown render ถูก
         if [[ "$line" =~ ^[[:space:]]*\|([[:space:]]*\|)+[[:space:]]*$ ]] || \
            [[ "$line" =~ ^[[:space:]]*\|([[:space:]]*:?-+:?[[:space:]]*\|)+[[:space:]]*$ ]]; then
             if [ -z "$table_buffer" ]; then table_buffer="$line"; else table_buffer="$table_buffer"$'\n'"$line"; fi
@@ -215,14 +220,15 @@ process_md_file() {
             if [ -n "$table_buffer" ]; then echo "$table_buffer" >> "$output_file"; table_buffer=""; fi
         fi
 
+        # แก้ HTML List <ul>
         if [[ "$line" == *"<ul>"* ]]; then
             line="$(echo "$line" | sed -E 's/<\/?ul>//g')"
             line="$(echo "$line" | sed -E 's/<li><p>/ * /g')"
             line="$(echo "$line" | sed -E 's/<\/p><\/li>//g')"
             line="$(echo "$line" | sed -E 's/<br>//g')"
-            count_html_list=$((count_html_list+1))
         fi
 
+        # แก้ Ordered List ในตาราง
         if [[ "$line" == *"|"* ]] && [[ "$line" == *"<ol"* ]]; then
             line="$(echo "$line" | perl -pe '
                 if (m/\|.*<ol/) {
@@ -234,28 +240,23 @@ process_md_file() {
             ')"
         fi
 
-        # ==========================================
-        # Images & Videos Path Fixing & Double Newline
-        # ==========================================
-
-        # 1. Image Cleanup
+        # 6.5: แก้ไข Path ของรูปภาพและไฟล์แนบ
+        # เปลี่ยน attachments/ -> uploads/
         if [[ "$line" == *"!"* ]]; then
             line="$(echo "$line" | perl -pe 's{!\[[^]]*\]\(}{![](}g')"
-            count_image=$((count_image+1))
         fi
 
-        # 2. Path Replacement
         if [[ "$line" == *"attachments/"* ]]; then
             line="$(echo "$line" | perl -pe 's{(?:\.\./)*attachments/.*?/([^/)]+\.(?:png|jpg|jpeg|gif|mp4|mov|pdf|zip|docx|xlsx))}{uploads/$1}gi')"
-            count_path=$((count_path+1))
         fi
 
-        # 3. Split Lines (Double Newline)
+        # ใส่ Double Newline หลังรูป
         if [[ "$line" == *"uploads/"* ]]; then
             line="$(echo "$line" | perl -pe 's{(\]\(uploads/[^)]+\))(?=\s*(?:!|\[))}{$1\n\n}g')"
         fi
-        # ==========================================
 
+        # 6.6: แปลง Admonition
+        # เปลี่ยนจาก Confluence format เป็น Outline format (:::info)
         if [[ "$line" == *"|"* ]] && [[ "$line" == *"> [!"* ]]; then
             line="$(echo "$line" | perl -pe '
                 BEGIN { %m=("IMPORTANT"=>"info","WARNING"=>"warning","CAUTION"=>"warning","TIP"=>"success","NOTE"=>"tip"); }
@@ -269,7 +270,6 @@ process_md_file() {
             TYPE_NEW="$(map_type "$TYPE_GFM")"
             echo ":::${TYPE_NEW}" >> "$output_file"
             in_admonition=1
-            count_admonition=$((count_admonition+1))
             continue
         fi
 
@@ -290,6 +290,7 @@ process_md_file() {
     if [ -n "$table_buffer" ]; then echo "$table_buffer" >> "$output_file"; fi
     if [ "$in_admonition" -eq 1 ]; then echo ":::" >> "$output_file"; fi
 
+    # 6.7: ใส่ชื่อผู้แต่ง
     local filename=$(basename "$input_file")
     local file_key=$(normalize_key "$filename")
     local author_name=""
@@ -307,24 +308,19 @@ process_md_file() {
         mv "$temp_final" "$output_file"
     fi
 
-    # ==========================================
-    # [NEW LOGIC] RENAME FILE TO TITLE
-    # ==========================================
+    # 6.8: เปลี่ยนชื่อไฟล์ตาม Title 
     if [ -n "$extracted_title" ]; then
         local new_filename="${extracted_title}.md"
         local final_dir=$(dirname "$output_file")
         local final_path="$final_dir/$new_filename"
 
-        # เปลี่ยนชื่อไฟล์ถ้าชื่อไม่เหมือนเดิม
         if [ "$output_file" != "$final_path" ]; then
             mv "$output_file" "$final_path"
         fi
     fi
 }
 
-# ==========================================
-# MAIN LOOP
-# ==========================================
+# Step 7: เริ่มวนลูปทำทีละ Part
 for part in "${PARTS[@]}"; do
     SRC="$INPUT_DIR/$part"
     DST="$OUTPUT_DIR/$part"
@@ -340,6 +336,7 @@ for part in "${PARTS[@]}"; do
     mkdir -p "$DST"
     mkdir -p "$DST/uploads"
 
+    # 7.1: ก๊อปปี้ไฟล์แนบ (Images/Videos/Docs)
     ATT_ROOT="$SRC/attachments"
     if [ -d "$ATT_ROOT" ]; then
         echo "📸 Copying media (images/videos/files) from $ATT_ROOT -> $DST/uploads"
@@ -355,7 +352,8 @@ for part in "${PARTS[@]}"; do
         echo "   No attachments folder found in $SRC"
     fi
 
-    echo "📝 Processing .md files (Injecting Authors)..."
+    # 7.2: ประมวลผลไฟล์ Markdown
+    echo "📝 Processing .md files (Injecting Authors & Cleaning)..."
     count_files=0
     while IFS= read -r -d '' mdfile; do
         rel="${mdfile#$SRC/}"
