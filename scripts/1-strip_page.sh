@@ -1,33 +1,49 @@
 #!/bin/bash
-# Usage: ./strip_page_id.sh input.txt
-# Overwrite input file with extracted page IDs.
-
 set -eu
 
-INPUT_FILE="$1"
+# ================= CONFIGURATION =================
+ENV_FILE=".env"
 
-if [ ! -f "$INPUT_FILE" ]; then
-    echo "ไม่พบไฟล์: $INPUT_FILE"
+if [ -f "$ENV_FILE" ]; then
+    # Load config without exporting everything to child processes
+    set -a
+    source "$ENV_FILE"
+    set +a
+else
+    echo "⚠️  Warning: .env file not found."
+fi
+
+TARGET_FILE="${1:-${INPUT_FILE:-url_list.txt}}"
+
+# ================= VALIDATION =================
+if [ ! -f "$TARGET_FILE" ]; then
+    echo "❌ Error: ไม่พบไฟล์ '$TARGET_FILE'"
+    echo "   กรุณาตรวจสอบไฟล์ .env หรือระบุชื่อไฟล์"
     exit 1
 fi
 
+echo "🔍 Processing file: $TARGET_FILE"
+
+# ================= MAIN LOGIC =================
 TMP_FILE=$(mktemp)
 
 while IFS= read -r line || [ -n "$line" ]; do
     
-    # ดึงทุก /pages/<digits> 
+    # ดึงเฉพาะตัวเลขหลัง /pages/
+    # ตัวอย่าง: .../pages/123456/Title -> 123456
     ids=$(echo "$line" | grep -oE '/pages/[0-9]+' | sed 's#/pages/##')
 
     if [ -n "$ids" ]; then
-        # ถ้ามีหลายอัน → ขึ้นบรรทัดเดียวคั่นด้วย space
+        # กรณี 1 บรรทัดมีหลาย Link (หรือ Link เดียว) ให้เรียงเป็นบรรทัดเดียวคั่นด้วย Space
         echo "$ids" | paste -sd ' ' - >> "$TMP_FILE"
     else
-        # ถ้าไม่ใช่ลิงก์แบบ pages/<id> → เขียนเหมือนเดิม
+        # ถ้าหา pattern ไม่เจอก็เขียนบรรทัดเดิมลงไป (หรือจะข้ามก็ได้ แล้วแต่ logic)
         echo "$line" >> "$TMP_FILE"
     fi
     
-done < "$INPUT_FILE"
+done < "$TARGET_FILE"
 
-mv "$TMP_FILE" "$INPUT_FILE"
+# เขียนทับไฟล์เดิม
+mv "$TMP_FILE" "$TARGET_FILE"
 
-echo "✓ เสร็จแล้ว → $INPUT_FILE"
+echo "✅ เสร็จแล้ว: แปลง URL เป็น ID เรียบร้อย ($TARGET_FILE)"

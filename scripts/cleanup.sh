@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # ================= CONFIGURATION =================
-# Step 1: โหลดค่า Config จากไฟล์ .env
 ENV_FILE=".env"
 
 if [ -f "$ENV_FILE" ]; then
@@ -14,7 +13,6 @@ else
     exit 1
 fi
 
-# กำหนดตัวแปรจาก Environment Variable
 DOMAIN="${OUTLINE_DOMAIN}"
 TOKEN="${OUTLINE_TOKEN}"
 SKIP_NAME="${SKIP_COLLECTION_NAME:-Welcome}" 
@@ -27,7 +25,6 @@ fi
 API_URL="${DOMAIN}/api"
 # =================================================
 
-# Step 2: เตรียมฟังก์ชันยิง API (Curl Wrapper)
 api_post() {
     local endpoint="$1"
     local payload="$2"
@@ -45,7 +42,6 @@ api_post() {
     fi
 }
 
-# Step 3: ตรวจสอบ Arguments (Flags)
 DELETE_ACTIVE=false
 DELETE_ARCHIVED=false
 DELETE_TRASH=false
@@ -72,7 +68,6 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# ไม่ใส่ flag -> ถือว่าลบ "ทั้งหมด" 
 if [ "$DELETE_ACTIVE" = false ] && [ "$DELETE_ARCHIVED" = false ] && [ "$DELETE_TRASH" = false ] && [ "$DELETE_IMPORTS" = false ]; then
     DELETE_ACTIVE=true
     DELETE_ARCHIVED=true
@@ -89,12 +84,13 @@ echo "   Press Ctrl+C to cancel within 5 seconds..."
 sleep 5
 echo "🚀 Starting Cleanup..."
 
-# Function A: ลบ Collection (ใช้ได้ทั้ง Active, Archive, Trash)
+# Function A: ลบ Collection
 delete_collections() {
     local list_json="$1"
     local type_label="$2"
+    local count=0
 
-    ITEMS=$(echo "$list_json" | jq -r '.data[] | @base64')
+    ITEMS=$(echo "$list_json" | jq -r '(.data // [])[] | @base64')
 
     if [ -z "$ITEMS" ] || [ "$ITEMS" == "null" ]; then
         echo "   ✨ No $type_label collections found."
@@ -102,114 +98,101 @@ delete_collections() {
     fi
 
     for row in $ITEMS; do
-        # ใช้ jq แกะค่าออกมาจาก base64
         _jq() { echo "${row}" | base64 --decode | jq -r "${1}"; }
         
         COLL_ID=$(_jq '.id')
         COLL_NAME=$(_jq '.name')
 
-        # ป้องกันการลบ Collection ที่สำคัญ (เช่น Welcome)
         if [[ "$COLL_NAME" == "$SKIP_NAME" ]]; then
-            echo "   🛡️  Skipping protected collection: $COLL_NAME ($COLL_ID)"
+            echo "   🛡️  Skipping protected: $COLL_NAME"
             continue
         fi
         
-        echo "   🗑️  Deleting ($type_label): $COLL_NAME ($COLL_ID)..."
+        echo "   🗑️  Deleting ($type_label): $COLL_NAME..."
         
-        # ยิงคำสั่ง Delete
-        # หมายเหตุ: ถ้า item อยู่ใน trash แล้ว การ delete ซ้ำคือการลบถาวร (Permanent Delete)
         DEL_RES=$(api_post "collections.delete" "{\"id\": \"$COLL_ID\"}")
         IS_OK=$(echo "$DEL_RES" | jq -r '.success // .ok')
         
         if [ "$IS_OK" != "true" ]; then
-            # ถ้าลบไม่ได้ (เช่น เป็น Active อยู่) ต้อง Archive ก่อน
-            echo "      ❌ Delete failed. Trying to Archive first..."
+            echo "      ❌ Direct delete failed. Archiving first..."
             api_post "collections.archive" "{\"id\": \"$COLL_ID\"}" > /dev/null
             DEL_RES_2=$(api_post "collections.delete" "{\"id\": \"$COLL_ID\"}")
-            IS_OK_2=$(echo "$DEL_RES_2" | jq -r '.success // .ok')
-            
-            if [ "$IS_OK_2" == "true" ]; then
-                echo "      ✅ Archived & Deleted."
-            else
-                echo "      ❌ Failed to delete: $DEL_RES_2"
-            fi
-        else
-            echo "      ✅ Deleted."
         fi
+        ((count++))
     done
+    
+    # [FIX 1] เพิ่มเวลาหลังจากลบ Collection เสร็จ เป็น 10 วินาที
+    if [ "$count" -gt 0 ]; then
+        echo "   ⏳ Deleted $count collections. Waiting 10s for backend processing..."
+        sleep 10
+    fi
 }
 
-# Function B: ลบประวัติการ Import
+# Function B: ลบ Import
 delete_file_imports() {
-    echo "🔍 Fetching File Operations (Imports)..."
-    
-    # ดึงเฉพาะ type="import"
+    echo "🔍 Fetching File Operations..."
     OPS_RES=$(api_post "fileOperations.list" '{"limit": 100, "type": "import"}')
-    ITEMS=$(echo "$OPS_RES" | jq -r '.data[] | @base64')
+    ITEMS=$(echo "$OPS_RES" | jq -r '(.data // [])[] | @base64')
 
     if [ -z "$ITEMS" ] || [ "$ITEMS" == "null" ]; then
-        echo "   ✨ No file imports/operations found."
+        echo "   ✨ No imports found."
         return
     fi
 
     for row in $ITEMS; do
         _jq() { echo "${row}" | base64 --decode | jq -r "${1}"; }
-        
         OP_ID=$(_jq '.id')
-        OP_STATE=$(_jq '.state')
-        OP_TYPE=$(_jq '.type')
         OP_NAME=$(_jq '.name // "Unknown"')
-
-        echo "   🗑️  Deleting Operation: [$OP_TYPE] $OP_NAME ($OP_STATE) - ID: $OP_ID..."
-        
-        DEL_RES=$(api_post "fileOperations.delete" "{\"id\": \"$OP_ID\"}")
-        IS_OK=$(echo "$DEL_RES" | jq -r '.success // .ok')
-        
-        if [ "$IS_OK" == "true" ]; then
-            echo "      ✅ Deleted."
-        else
-            echo "      ❌ Failed: $DEL_RES"
-        fi
+        echo "   🗑️  Deleting Import: $OP_NAME..."
+        api_post "fileOperations.delete" "{\"id\": \"$OP_ID\"}" > /dev/null
     done
 }
 
-# Function C: ล้างถังขยะเอกสาร (Empty Trash API)
+# Function C: Empty Trash (Aggressive Loop)
 empty_global_trash() {
-    echo "🗑️  Emptying Global Document Trash..."
+    echo "🗑️  Emptying Global Document Trash (Aggressive Mode)..."
     
-    DEL_RES=$(api_post "documents.empty_trash" "{}")
-    IS_OK=$(echo "$DEL_RES" | jq -r '.success // .ok')
-    
-    if [ "$IS_OK" == "true" ]; then
-        echo "   ✅ Trash Emptied Successfully."
-    else
-        echo "   ❌ Failed to empty trash: $DEL_RES"
-    fi
+    # [FIX 2] วนลูปยิงคำสั่งล้างถังขยะ 3 รอบ
+    for i in {1..3}; do
+        echo "   👉 Attempt $i/3: Sending empty_trash command..."
+        DEL_RES=$(api_post "documents.empty_trash" "{}")
+        IS_OK=$(echo "$DEL_RES" | jq -r '.success // .ok')
+        
+        if [ "$IS_OK" == "true" ]; then
+            echo "      ✅ Command Accepted."
+        else
+            echo "      ⚠️  Failed: $DEL_RES"
+        fi
+        
+        # ถ้ารอบสุดท้ายไม่ต้องรอ
+        if [ "$i" -lt 3 ]; then
+            echo "      ⏳ Waiting 5s for background job..."
+            sleep 5
+        fi
+    done
 }
 
 # =========================================================
 # MAIN EXECUTION FLOW
 # =========================================================
 
-# Step 4: ลบ Active Collections
+# Step 4: Active Collections
 if [ "$DELETE_ACTIVE" = true ]; then
     echo "----------------------------------------"
     echo "📂 Processing Active Collections..."
-    # sort by updatedAt DESC เพื่อให้เห็นตัวล่าสุด
     ACTIVE_RES=$(api_post "collections.list" '{"limit": 100, "sort": "updatedAt", "direction": "DESC"}')
     delete_collections "$ACTIVE_RES" "Active"
 fi
 
-# Step 5: ลบ Archived Collections
+# Step 5: Archived Collections
 if [ "$DELETE_ARCHIVED" = true ]; then
     echo "----------------------------------------"
     echo "🗄️  Processing Archived Collections..."
-    # filter status=["archived"]
     ARCHIVED_RES=$(api_post "collections.list" '{"limit": 100, "sort": "updatedAt", "direction": "DESC", "statusFilter": ["archived"]}')
     delete_collections "$ARCHIVED_RES" "Archived"
 fi
 
-# Step 6: ล้างถังขยะ (Trash)
+# Step 6: Trash
 if [ "$DELETE_TRASH" = true ]; then
     echo "----------------------------------------"
     echo "🗑️  Processing Trash..."
@@ -219,12 +202,17 @@ if [ "$DELETE_TRASH" = true ]; then
     TRASH_COLLS_RES=$(api_post "collections.list" '{"limit": 100, "statusFilter": ["deleted"]}')
     delete_collections "$TRASH_COLLS_RES" "Trashed"
 
-    # 6.2 ล้างเอกสารในถังขยะ (Documents)
-    echo "   👉 Emptying Document Trash..."
+    # [FIX 3] รออีกนิดก่อนล้างถังขยะรวม
+    if [ "$DELETE_ACTIVE" = true ] || [ "$DELETE_ARCHIVED" = true ]; then
+        echo "   ⏳ Syncing: Final 5s wait before emptying documents..."
+        sleep 5
+    fi
+
+    # 6.2 ล้างเอกสารในถังขยะ (Loop 3 รอบ)
     empty_global_trash
 fi
 
-# Step 7: ลบประวัติการ Import
+# Step 7: Imports
 if [ "$DELETE_IMPORTS" = true ]; then
     echo "----------------------------------------"
     echo "📥 Processing File Imports..."
