@@ -2,7 +2,7 @@
 set -eu
 
 # ================= CONFIGURATION =================
-ENV_FILE=".env"
+ENV_FILE="workspace/.env"
 
 if [ -f "$ENV_FILE" ]; then
     # Load config without exporting everything to child processes

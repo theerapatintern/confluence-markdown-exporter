@@ -3,7 +3,7 @@
 # ================= CONFIGURATION =================
 
 # Step 1: โหลดค่า Config จากไฟล์ .env
-ENV_FILE=".env"
+ENV_FILE="workspace/.env"
 
 if [ -f "$ENV_FILE" ]; then
     echo "⚙️  Loading configuration from .env..."
@@ -26,7 +26,7 @@ EMAIL="${CONFLUENCE_EMAIL}"
 TOKEN="${CONFLUENCE_API_TOKEN}"
 
 INPUT_ID="${INPUT_FILE:-url_list.txt}"
-OUTPUT_FILE="${CREATOR_REPORT_FILE:-creator_report.txt}"
+OUTPUT_FILE="confluence_markdown_exporter/creator_report.txt"
 
 # ================= MAIN LOGIC =================
 

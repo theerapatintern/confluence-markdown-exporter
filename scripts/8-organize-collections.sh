@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Step 1: โหลดค่า Config จากไฟล์ .env
-ENV_FILE=".env"
+ENV_FILE="workspace/.env"
 
 if [ -f "$ENV_FILE" ]; then
     echo "⚙️  Loading configuration from .env..."

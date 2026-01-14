@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Step 1: โหลดค่า Config จากไฟล์ .env
-ENV_FILE=".env"
+ENV_FILE="workspace/.env"
 
 if [ -f "$ENV_FILE" ]; then
     echo "⚙️  Loading configuration from .env..."
@@ -15,9 +15,9 @@ else
 fi
 
 # กำหนดค่าเริ่มต้น (เผื่อใน .env ลืมใส่มา)
-INPUT_DIR="${MIGRATE_PARTS_DIR:-migrate/parts}"          # โฟลเดอร์ต้นทาง (ที่แบ่ง part แล้ว)
-OUTPUT_DIR="${MIGRATE_READY_DIR:-migrate/ready_to_import}" # โฟลเดอร์ปลายทาง (พร้อม Import)
-AUTHOR_FILE="${CREATOR_REPORT_FILE:-creator_report.txt}"   # ไฟล์จับคู่ชื่อคน
+INPUT_DIR="migrate/stagings"          # โฟลเดอร์ต้นทาง (ที่แบ่ง part แล้ว)
+OUTPUT_DIR="migrate/packages" # โฟลเดอร์ปลายทาง (พร้อม Import)
+AUTHOR_FILE="confluence_markdown_exporter/creator_report.txt"   # ไฟล์จับคู่ชื่อคน
 
 # ==========================================
 # HELPER FUNCTIONS
@@ -376,6 +376,8 @@ for part in "${PARTS[@]}"; do
         fi
     )
 done
+
+rm -rf $AUTHOR_FILE
 
 echo
 echo "🎉 All parts processed successfully."

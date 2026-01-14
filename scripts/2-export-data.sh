@@ -4,8 +4,8 @@
 # Step 1: กำหนดตัวแปรและชื่อไฟล์ต่างๆ ที่ต้องใช้ใน Script
 FILE="${INPUT_FILE:-url_list.txt}"
 VENV_ACTIVATE_SCRIPT="./venv/bin/activate"
-ENV_FILE=".env"
-CUSTOM_CONFIG="custom_config.json"
+ENV_FILE="workspace/.env"
+CUSTOM_CONFIG="confluence_markdown_exporter/custom_config.json"
 
 # Step 2: โหลดค่า Key/Token จากไฟล์ .env 
 if [ -f "$ENV_FILE" ]; then

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ----------------- CONFIGURATION -----------------
 # Step 1: โหลดตัวแปรจากไฟล์ .env 
-ENV_FILE=".env"
+ENV_FILE="workspace/.env"
 
 if [ -f "$ENV_FILE" ]; then
     set -a

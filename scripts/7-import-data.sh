@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ================= CONFIGURATION =================
-ENV_FILE=".env"
+ENV_FILE="workspace/.env"
 
 if [ -f "$ENV_FILE" ]; then
     set -a

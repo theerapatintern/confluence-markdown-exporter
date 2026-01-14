@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Step 1: โหลดค่า Config จากไฟล์ .env
-ENV_FILE=".env"
+ENV_FILE="workspace/.env"
 
 if [ -f "$ENV_FILE" ]; then
     set -a
@@ -14,7 +14,7 @@ fi
 
 # กำหนดค่าเริ่มต้น
 SRC="${OUTPUT_FOLDER:-output}"          # โฟลเดอร์ต้นทาง
-DES="${MIGRATE_PARTS_DIR:-migrate/parts}" # โฟลเดอร์ปลายทางที่จะให้สร้าง Part
+DES="migrate/stagings" # โฟลเดอร์ปลายทางที่จะให้สร้าง Part
 MAX_SIZE_MB="${MAX_SPLIT_SIZE_MB:-100}"  # ขนาดสูงสุดต่อ Part (MB)
 
 # แปลง MB เป็น KB (1024 KB = 1 MB)

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ================= CONFIGURATION =================
-ENV_FILE=".env"
+ENV_FILE="workspace/.env"
 
 if [ -f "$ENV_FILE" ]; then
     echo "⚙️  Loading configuration from .env..."
@@ -15,15 +15,14 @@ fi
 
 # ================= SAFETY CHECK =================
 # ป้องกันการลบ root หรือ path ที่ไม่ได้ตั้งค่า
-if [ -z "$OUTPUT_FOLDER" ] || [ -z "$MIGRATE_PARTS_DIR" ] || [ -z "$MIGRATE_READY_DIR" ]; then
+if [ -z "$OUTPUT_FOLDER" ]; then
     echo "❌ Error: cleanup paths are not fully defined in .env"
     exit 1
 fi
 
 echo "⚠️  WARNING: This will DELETE local temporary migration files:"
 echo "   🗑️  Output Folder:  $OUTPUT_FOLDER"
-echo "   🗑️  Parts Folder:   $MIGRATE_PARTS_DIR"
-echo "   🗑️  Ready Folder:   $MIGRATE_READY_DIR"
+echo "   🗑️  Migrate Folder:   migrate"
 echo "   🗑️  Creator File:   $CREATOR_REPORT_FILE"
 echo ""
 echo "   Waiting 5 seconds... (Press Ctrl+C to cancel)"
@@ -42,22 +41,14 @@ else
 fi
 
 # 2. ลบ Parts Folder (Markdown ที่แบ่งแล้ว)
-if [ -d "$MIGRATE_PARTS_DIR" ]; then
-    rm -rf "$MIGRATE_PARTS_DIR"
-    echo "   ✅ Deleted: $MIGRATE_PARTS_DIR"
+if [ -d "migrate" ]; then
+    rm -rf "migrate"
+    echo "   ✅ Deleted: migrate"
 else
-    echo "   ✨ Skipped (Not found): $MIGRATE_PARTS_DIR"
+    echo "   ✨ Skipped (Not found): migrate"
 fi
 
-# 3. ลบ Ready Folder (Zip Files)
-if [ -d "$MIGRATE_READY_DIR" ]; then
-    rm -rf "$MIGRATE_READY_DIR"
-    echo "   ✅ Deleted: $MIGRATE_READY_DIR"
-else
-    echo "   ✨ Skipped (Not found): $MIGRATE_READY_DIR"
-fi
-
-# 4. ลบ Creator Report File
+# 3. ลบ Creator Report File
 if [ -f "$CREATOR_REPORT_FILE" ]; then
     rm -f "$CREATOR_REPORT_FILE"
     echo "   ✅ Deleted: $CREATOR_REPORT_FILE"
