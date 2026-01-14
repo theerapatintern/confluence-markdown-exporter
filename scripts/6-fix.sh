@@ -363,6 +363,18 @@ for part in "${PARTS[@]}"; do
     done < <(find "$SRC" -type f -name "*.md" -print0)
 
     echo "   Processed $count_files Markdown files."
+    
+    # 7.3: สร้างไฟล์ Zip สำหรับแต่ละ Part
+    echo "📦 Zipping part: $part ..."
+    (
+        cd "$OUTPUT_DIR"
+        if command -v zip >/dev/null 2>&1; then
+            zip -r -q "${part}.zip" "$part"
+            echo "   ✅ Created zip: ${part}.zip"
+        else
+            echo "   ⚠️  Warning: 'zip' command not found. Skipping zip creation."
+        fi
+    )
 done
 
 echo

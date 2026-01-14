@@ -25,19 +25,19 @@ CONF_DOMAIN="${CONFLUENCE_URL%/}" # ตัด / ท้ายออกถ้า�
 EMAIL="${CONFLUENCE_EMAIL}"
 TOKEN="${CONFLUENCE_API_TOKEN}"
 
-INPUT_FILE="${INPUT_ID_FILE:-url_list.txt}"
-OUTPUT_FILE="${OUTPUT_CREATOR_FILE:-creator_report.txt}"
+INPUT_ID="${INPUT_FILE:-url_list.txt}"
+OUTPUT_FILE="${CREATOR_REPORT_FILE:-creator_report.txt}"
 
 # ================= MAIN LOGIC =================
 
 # Step 2: ตรวจสอบไฟล์ Input
-if [ ! -f "$INPUT_FILE" ]; then
-    echo "❌ Error: Input file '$INPUT_FILE' not found!"
+if [ ! -f "$INPUT_ID" ]; then
+    echo "❌ Error: Input file '$INPUT_ID' not found!"
     exit 1
 fi
 
 echo "🚀 Starting to fetch Title & Author..."
-echo "📂 Input:  $INPUT_FILE"
+echo "📂 Input:  $INPUT_ID"
 echo "📂 Output: $OUTPUT_FILE"
 echo "--------------------------------------"
 
@@ -78,7 +78,7 @@ while IFS= read -r page_id || [ -n "$page_id" ]; do
         echo "   ❌ Error: No response for ID $clean_id"
     fi
 
-done < "$INPUT_FILE"
+done < "$INPUT_ID"
 
 echo "--------------------------------------"
 echo "🎉 Done! Saved to: $OUTPUT_FILE"
