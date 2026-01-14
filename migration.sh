@@ -99,6 +99,12 @@ echo "   ✅ Ready to organize collections."
 # 8. Collection Creation / Organization
 run_step "8-collection.sh"
 
+
+# 9. CLEANUP LOCAL FILES
+echo "-------------------------------------------------------"
+echo "🧹 Cleaning up local temporary files..."
+run_step "9-cleanup_local.sh"
+
 echo "======================================================="
 echo "🎉🎉🎉 ALL MIGRATION STEPS COMPLETED SUCCESSFULLY! 🎉🎉🎉"
 echo "======================================================="
