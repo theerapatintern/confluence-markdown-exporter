@@ -23,7 +23,6 @@ fi
 echo "⚠️  WARNING: This will DELETE local temporary migration files:"
 echo "   🗑️  Output Folder:  $OUTPUT_FOLDER"
 echo "   🗑️  Migrate Folder:   migrate"
-echo "   🗑️  Creator File:   $CREATOR_REPORT_FILE"
 echo ""
 echo "   Waiting 5 seconds... (Press Ctrl+C to cancel)"
 sleep 5
@@ -46,14 +45,6 @@ if [ -d "migrate" ]; then
     echo "   ✅ Deleted: migrate"
 else
     echo "   ✨ Skipped (Not found): migrate"
-fi
-
-# 3. ลบ Creator Report File
-if [ -f "$CREATOR_REPORT_FILE" ]; then
-    rm -f "$CREATOR_REPORT_FILE"
-    echo "   ✅ Deleted: $CREATOR_REPORT_FILE"
-else
-    echo "   ✨ Skipped (Not found): $CREATOR_REPORT_FILE"
 fi
 
 echo "-------------------------------------------------------"

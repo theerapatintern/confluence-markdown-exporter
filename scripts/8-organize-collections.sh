@@ -86,7 +86,7 @@ get_or_create_collection_id() {
     local SAFE_TITLE=$(echo "$clean_target_name" | sed 's/"/\\"/g')
     
     # - ยิง API สร้าง
-    CREATE_RES=$(api_post "collections.create" "{\"name\": \"$SAFE_TITLE\", \"permission\": \"read\", \"description\": \"$FANCY_DESC\"}")
+    CREATE_RES=$(api_post "collections.create" "{\"name\": \"$SAFE_TITLE\", \"permission\": null, \"description\": \"$FANCY_DESC\"}")
     
     NEW_ID=$(echo "$CREATE_RES" | jq -r '.data.id')
     

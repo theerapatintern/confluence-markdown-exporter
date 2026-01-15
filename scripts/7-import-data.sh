@@ -102,8 +102,7 @@ process_zip_file() {
     local PAYLOAD_3=$(jq -n \
         --arg attachmentId "$ATTACHMENT_ID" \
         --arg format "outline-markdown" \
-        --arg permission "read_write" \
-        '{attachmentId: $attachmentId, format: $format, permission: $permission}')
+        '{attachmentId: $attachmentId, format: $format, permission: null}')
 
     local RES_3=$(api_post "collections.import" "$PAYLOAD_3")
     local IS_IMPORT_OK=$(echo "$RES_3" | jq -r '.ok // .success // false')
