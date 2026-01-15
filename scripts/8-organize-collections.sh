@@ -22,6 +22,7 @@ fi
 DOMAIN="${OUTLINE_DOMAIN}"
 TOKEN="${OUTLINE_TOKEN}"
 NO_PARENT_NAME="${NO_PARENT_NAME:-General}" # Default เป็น General
+MANAGER_GROUP_NAME="${MANAGER_GROUP_NAME:-}"
 # แปลง String ใน .env ให้เป็น Array
 TARGET_COLLECTIONS=("part1" "part2" "part3" "part4" "part5" "part6")
 
@@ -52,6 +53,22 @@ trim() {
     var="${var%"${var##*[![:space:]]}"}"
     echo -n "$var"
 }
+
+# Step 1.5: ถ้ามีการตั้งค่า MANAGER_GROUP_NAME ให้ไปหา ID มาเตรียมไว้
+MANAGER_GROUP_ID=""
+if [ -n "$MANAGER_GROUP_NAME" ]; then
+    echo "🔍 Looking up Manager Group: '$MANAGER_GROUP_NAME'..."
+    GRP_RES=$(api_post "groups.list" "{\"query\": \"$MANAGER_GROUP_NAME\", \"limit\": 1}")
+    
+    # ดึง ID ของ Group ที่ชื่อตรงเป๊ะๆ
+    MANAGER_GROUP_ID=$(echo "$GRP_RES" | jq -r --arg n "$MANAGER_GROUP_NAME" '.data.groups[] | select(.name == $n) | .id')
+    
+    if [ -n "$MANAGER_GROUP_ID" ] && [ "$MANAGER_GROUP_ID" != "null" ]; then
+        echo "   ✅ Found Manager Group ID: $MANAGER_GROUP_ID"
+    else
+        echo "   ⚠️  Manager Group '$MANAGER_GROUP_NAME' not found! Collections will be Private."
+    fi
+fi
 
 # Step 2: ฟังก์ชันหาหรือสร้าง Collection ใหม่
 get_or_create_collection_id() {
@@ -85,13 +102,26 @@ get_or_create_collection_id() {
     
     local SAFE_TITLE=$(echo "$clean_target_name" | sed 's/"/\\"/g')
     
-    # - ยิง API สร้าง
-    CREATE_RES=$(api_post "collections.create" "{\"name\": \"$SAFE_TITLE\", \"permission\": null, \"description\": \"$FANCY_DESC\"}")
+    # ถ้าชื่อเท่ากับ General ให้ permission = "read"
+    # ถ้าชื่ออื่น ให้ permission = null (Private / Default)
+    local PERMISSION_VAL="null"
+    if [ "$clean_target_name" == "$NO_PARENT_NAME" ]; then
+        PERMISSION_VAL="\"read\""
+    fi
+    
+    # - ยิง API สร้าง (ใช้ $PERMISSION_VAL)
+    CREATE_RES=$(api_post "collections.create" "{\"name\": \"$SAFE_TITLE\", \"permission\": $PERMISSION_VAL, \"description\": \"$FANCY_DESC\"}")
     
     NEW_ID=$(echo "$CREATE_RES" | jq -r '.data.id')
     
     if [ -n "$NEW_ID" ] && [ "$NEW_ID" != "null" ]; then
         # อัปเดต Cache
+        if [ "$clean_target_name" != "$NO_PARENT_NAME" ] && [ -n "$MANAGER_GROUP_ID" ]; then
+             # เพิ่ม Group ให้เป็น read_write
+             ADD_GRP_RES=$(api_post "collections.add_group" "{\"id\": \"$NEW_ID\", \"groupId\": \"$MANAGER_GROUP_ID\", \"permission\": \"read_write\"}")
+             # (Optional: Log success/fail here if needed, but we keep it silent to keep stdout clean)
+        fi
+
         EXISTING_COLLS["$clean_target_name"]="$NEW_ID" 
         echo "$NEW_ID"
     else
